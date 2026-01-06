@@ -1,3 +1,102 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ===== PDF Text Selection ===== */
+.react-pdf__Page__textContent {
+  user-select: text !important;
+  cursor: text;
+}
+
+.react-pdf__Page__textContent span::selection {
+  background-color: rgba(59, 130, 246, 0.3);
+}
+
+/* ===== Text Highlights ===== */
+.highlight-rect {
+  pointer-events: none;
+  border-radius: 2px;
+}
+
+/* ===== ReactFlow Handle Visibility ===== */
+.snippet-handle {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.react-flow__node:hover .snippet-handle {
+  opacity: 1;
+}
+
+/* Always show handles when node is selected */
+.react-flow__node.selected .snippet-handle {
+  opacity: 1;
+}
+
+/* Show handles when connecting */
+.react-flow__node.connecting .snippet-handle {
+  opacity: 1;
+}
+
+/* ===== ReactFlow Edge Styles ===== */
+.react-flow__edge-path {
+  stroke-width: 2;
+}
+
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke-width: 3;
+}
+
+.react-flow__edge:hover .react-flow__edge-path {
+  stroke-width: 3;
+}
+
+/* ===== Context Menu Animation ===== */
+@keyframes contextMenuFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.context-menu-enter {
+  animation: contextMenuFadeIn 0.1s ease-out;
+}
+
+/* ===== Comment Popover ===== */
+@keyframes popoverSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.comment-popover-enter {
+  animation: popoverSlideIn 0.15s ease-out;
+}
+
+/* ===== Scrollbar Styling ===== */
+.overflow-y-auto::-webkit-scrollbar {
+  width: 6px;
+}
+
+.overflow-y-auto::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.overflow-y-auto::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
+}
+
+.overflow-y-auto::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(0, 0, 0, 0.3);
+}
