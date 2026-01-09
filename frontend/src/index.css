@@ -2,6 +2,57 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ===== Design System: The Rationalist ===== */
+/* Swiss Structure - Authoritative, rigid, institutional */
+
+@layer base {
+  body {
+    @apply bg-neutral-200 text-neutral-800;
+    font-family: 'Inter', 'Roboto', 'Helvetica Neue', sans-serif;
+  }
+}
+
+@layer components {
+  /* Primary Button - Swiss Style */
+  .btn-primary {
+    @apply bg-blue-900 text-white rounded-none px-6 py-3 font-medium
+           hover:bg-blue-800 transition-colors;
+  }
+
+  /* Secondary Button */
+  .btn-secondary {
+    @apply bg-white text-blue-900 border border-blue-900 rounded-none
+           px-6 py-3 font-medium hover:bg-blue-50 transition-colors;
+  }
+
+  /* Card with Spine Accent */
+  .card-spine {
+    @apply bg-white border-l-4 border-blue-900 shadow-sm p-6 rounded-none
+           hover:translate-x-1 transition-transform duration-200;
+  }
+
+  /* Standard Card */
+  .card {
+    @apply bg-white shadow-sm p-6 rounded-none;
+  }
+
+  /* Input Field */
+  .input-field {
+    @apply bg-white border border-neutral-300 p-3 rounded-none
+           focus:outline-none focus:border-blue-900 focus:ring-1 focus:ring-blue-900;
+  }
+
+  /* Status Badge */
+  .badge {
+    @apply bg-blue-100 text-blue-900 font-bold px-2 py-1 text-xs rounded-none uppercase;
+  }
+
+  /* Alert/Advisor Box */
+  .alert-box {
+    @apply bg-white border-2 border-blue-900 text-blue-900 p-6 rounded-none;
+  }
+}
+
 /* ===== PDF Text Selection ===== */
 .react-pdf__Page__textContent {
   user-select: text !important;

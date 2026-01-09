@@ -1,21 +1,34 @@
-import { useEffect, useState } from 'react';
-import { FileText, Globe, Save, FilePlus, RefreshCw } from 'lucide-react';
+import { useEffect, useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { FileText, Globe, Save, FilePlus, RefreshCw, Plus } from 'lucide-react';
 import { fetchFiles, syncLibrary } from '../api';
 import type { FileEntry } from '../api';
 import { useAppStore } from '../store/useAppStore';
+import { QuickAddModal } from './QuickAddModal';
 
 export function PDFLibrarySidebar() {
   const [files, setFiles] = useState<FileEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const navigate = useNavigate();
 
   const selectedPdf = useAppStore((state) => state.selectedPdf);
   const setSelectedPdf = useAppStore((state) => state.setSelectedPdf);
   const saveProject = useAppStore((state) => state.saveProject);
-  const newProject = useAppStore((state) => state.newProject);
   const isDirty = useAppStore((state) => state.isDirty);
   const projectName = useAppStore((state) => state.projectMetadata.name);
+  const selectedItemKeys = useAppStore((state) => state.selectedItemKeys);
+  const newProject = useAppStore((state) => state.newProject);
+
+  // Filter files by selected items (show all if none selected for backward compat)
+  const filteredFiles = useMemo(() => {
+    if (selectedItemKeys.length === 0) {
+      return files;
+    }
+    return files.filter((f) => selectedItemKeys.includes(f.key));
+  }, [files, selectedItemKeys]);
 
   useEffect(() => {
     loadFiles();
@@ -68,23 +81,26 @@ export function PDFLibrarySidebar() {
       if (!confirmed) return;
     }
     newProject();
+    navigate('/');
   };
 
   return (
-    <aside className="w-64 h-full bg-white border-r border-gray-200 flex flex-col">
-      {/* Header */}
-      <div className="p-4 border-b border-gray-200">
-        <h2 className="text-lg font-semibold text-gray-800 mb-1">
-          Liquid Science
+    <aside className="w-64 h-full bg-white border-r border-neutral-300 flex flex-col">
+      {/* Header - Swiss Style */}
+      <div className="p-4 border-b-4 border-blue-900 bg-white">
+        <h2 className="text-sm font-extrabold text-blue-900 uppercase tracking-wide mb-1">
+          Project
         </h2>
-        <p className="text-xs text-gray-500">{projectName}</p>
+        <p className="text-sm font-medium text-neutral-800 truncate" title={projectName}>
+          {projectName}
+        </p>
       </div>
 
       {/* Project Actions */}
-      <div className="p-3 border-b border-gray-200 flex gap-2">
+      <div className="p-3 border-b border-neutral-300 flex gap-2">
         <button
           onClick={handleNewProject}
-          className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 rounded transition-colors"
+          className="flex-1 flex items-center justify-center gap-1 px-2 py-2 text-xs font-medium bg-white border border-neutral-300 text-neutral-700 hover:bg-neutral-100 rounded-none transition-colors"
           title="New Project"
         >
           <FilePlus className="w-4 h-4" />
@@ -92,10 +108,10 @@ export function PDFLibrarySidebar() {
         </button>
         <button
           onClick={handleSaveProject}
-          className={`flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs rounded transition-colors ${
+          className={`flex-1 flex items-center justify-center gap-1 px-2 py-2 text-xs font-medium rounded-none transition-colors ${
             isDirty
-              ? 'bg-blue-500 text-white hover:bg-blue-600'
-              : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+              ? 'bg-blue-900 text-white hover:bg-blue-800'
+              : 'bg-neutral-100 text-neutral-500 border border-neutral-300'
           }`}
           title="Save Project"
         >
@@ -107,98 +123,99 @@ export function PDFLibrarySidebar() {
       {/* File Library */}
       <div className="flex-1 overflow-y-auto">
         <div className="p-3">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-medium text-gray-700">
-              Zotero Library
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-xs font-bold text-neutral-800 uppercase tracking-wide">
+              Documents
             </h3>
-            <button
-              onClick={handleSync}
-              disabled={syncing}
-              className={`flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors ${
-                syncing
-                  ? 'bg-blue-100 text-blue-600 cursor-wait'
-                  : 'bg-gray-100 hover:bg-gray-200 text-gray-600'
-              }`}
-              title="Sync from Zotero"
-            >
-              <RefreshCw className={`w-3 h-3 ${syncing ? 'animate-spin' : ''}`} />
-              {syncing ? 'Syncing...' : 'Sync'}
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-none transition-colors bg-blue-100 hover:bg-blue-200 text-blue-900"
+                title="Add Items to Project"
+              >
+                <Plus className="w-3 h-3" />
+                Add
+              </button>
+              <button
+                onClick={handleSync}
+                disabled={syncing}
+                className={`flex items-center gap-1 px-2 py-1 text-xs rounded-none transition-colors ${
+                  syncing
+                    ? 'bg-blue-100 text-blue-900 cursor-wait'
+                    : 'bg-neutral-100 hover:bg-neutral-200 text-neutral-600'
+                }`}
+                title="Sync from Zotero"
+              >
+                <RefreshCw className={`w-3 h-3 ${syncing ? 'animate-spin' : ''}`} />
+              </button>
+            </div>
           </div>
 
           {loading && (
-            <div className="text-sm text-gray-500 py-4 text-center">
+            <div className="text-sm text-neutral-500 py-4 text-center">
               Loading files...
             </div>
           )}
 
           {error && (
-            <div className="text-sm text-red-500 py-4 px-2">
-              <p className="mb-2">Error: {error}</p>
+            <div className="text-sm py-4 px-2 bg-red-50 border-l-4 border-red-500">
+              <p className="text-red-700 mb-2">Error: {error}</p>
               <button
                 onClick={loadFiles}
-                className="text-xs text-blue-600 hover:underline"
+                className="text-xs text-blue-900 font-bold hover:underline"
               >
                 Retry
               </button>
             </div>
           )}
 
-          {!loading && !error && files.length === 0 && (
-            <div className="text-sm text-gray-500 py-4 text-center">
-              <p className="mb-2">No files cached</p>
+          {!loading && !error && filteredFiles.length === 0 && (
+            <div className="text-sm text-neutral-500 py-4 text-center border border-neutral-300 bg-neutral-50">
+              <p className="mb-2">No files in project</p>
               <button
-                onClick={handleSync}
-                disabled={syncing}
-                className="text-xs text-blue-600 hover:underline"
+                onClick={() => setShowAddModal(true)}
+                className="text-xs text-blue-900 font-bold hover:underline"
               >
-                Click Sync to load from Zotero
+                Add documents
               </button>
             </div>
           )}
 
-          {!loading && !error && files.length > 0 && (
+          {!loading && !error && filteredFiles.length > 0 && (
             <div className="space-y-1">
-              {files.map((file) => {
+              {filteredFiles.map((file) => {
                 const isSelected = selectedPdf?.path === file.path;
                 const isHtml = file.type === 'html';
                 const Icon = isHtml ? Globe : FileText;
-                const iconColorSelected = isHtml ? 'text-green-600' : 'text-blue-600';
-                const iconColorDefault = isHtml ? 'text-green-400' : 'text-gray-400';
-                const bgSelected = isHtml ? 'bg-green-50 border-green-200' : 'bg-blue-50 border-blue-200';
-                const textSelected = isHtml ? 'text-green-900' : 'text-blue-900';
 
                 return (
                   <button
                     key={file.path}
                     onClick={() => handleSelectPdf(file)}
-                    className={`w-full text-left px-3 py-2 rounded transition-colors flex items-start gap-2 ${
+                    className={`w-full text-left px-3 py-2 rounded-none transition-all flex items-start gap-2 ${
                       isSelected
-                        ? `${bgSelected} border`
-                        : 'hover:bg-gray-50 border border-transparent'
+                        ? 'bg-blue-900 text-white'
+                        : 'hover:bg-neutral-100 border-l-2 border-transparent hover:border-blue-900'
                     }`}
                   >
                     <Icon
                       className={`w-4 h-4 mt-0.5 flex-shrink-0 ${
-                        isSelected ? iconColorSelected : iconColorDefault
+                        isSelected ? 'text-white' : isHtml ? 'text-green-600' : 'text-blue-900'
                       }`}
                     />
                     <div className="flex-1 min-w-0">
                       <div
                         className={`text-sm truncate ${
-                          isSelected
-                            ? `${textSelected} font-medium`
-                            : 'text-gray-700'
+                          isSelected ? 'font-medium' : 'text-neutral-800'
                         }`}
                         title={file.name}
                       >
                         {file.name}
                       </div>
-                      <div className="flex items-center gap-2 text-xs text-gray-400">
-                        <span className={isHtml ? 'text-green-500' : 'text-blue-500'}>
+                      <div className={`text-xs ${isSelected ? 'text-blue-200' : 'text-neutral-500'}`}>
+                        <span className="badge text-[10px] px-1 py-0">
                           {isHtml ? 'HTML' : 'PDF'}
                         </span>
-                        {file.size && <span>{formatFileSize(file.size)}</span>}
                       </div>
                     </div>
                   </button>
@@ -210,19 +227,26 @@ export function PDFLibrarySidebar() {
       </div>
 
       {/* Footer */}
-      <div className="p-3 border-t border-gray-200 text-xs text-gray-500">
+      <div className="p-3 border-t border-neutral-300 text-xs text-neutral-600 bg-neutral-50">
         {(() => {
-          const pdfCount = files.filter(f => f.type === 'pdf').length;
-          const htmlCount = files.filter(f => f.type === 'html').length;
-          return `${files.length} files (${pdfCount} PDFs, ${htmlCount} HTMLs)`;
+          const pdfCount = filteredFiles.filter(f => f.type === 'pdf').length;
+          const htmlCount = filteredFiles.filter(f => f.type === 'html').length;
+          const totalText = selectedItemKeys.length > 0
+            ? `${filteredFiles.length} of ${files.length}`
+            : `${files.length}`;
+          return (
+            <span className="font-medium">
+              {totalText} documents <span className="text-neutral-400">({pdfCount} PDF, {htmlCount} HTML)</span>
+            </span>
+          );
         })()}
       </div>
+
+      {/* Quick Add Modal */}
+      <QuickAddModal
+        isOpen={showAddModal}
+        onClose={() => setShowAddModal(false)}
+      />
     </aside>
   );
-}
-
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }

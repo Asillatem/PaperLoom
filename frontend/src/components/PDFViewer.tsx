@@ -104,6 +104,8 @@ export function PDFViewer() {
       data: {
         label: text,
         sourcePdf: selectedPdf?.path || '',
+        sourceName: selectedPdf?.name || 'Unknown',
+        sourceType: 'pdf',
         location: {
           pageIndex: currentPage - 1,
           rect: pdfRect,

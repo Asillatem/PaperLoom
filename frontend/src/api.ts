@@ -1,7 +1,7 @@
-import type { ProjectData, FileEntry } from './types';
+import type { ProjectData, FileEntry, ProjectSummary } from './types';
 
-// Re-export FileEntry for backward compatibility
-export type { FileEntry };
+// Re-export types for backward compatibility
+export type { FileEntry, ProjectSummary };
 
 const API_BASE = 'http://localhost:8000';
 
@@ -55,7 +55,7 @@ export const getHtmlUrl = getFileUrl;
  * @param filename - Optional filename for the project
  */
 export async function saveProject(project: ProjectData, filename?: string): Promise<void> {
-  const resp = await fetch('http://localhost:8000/save', {
+  const resp = await fetch(`${API_BASE}/save`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ project, filename }),
@@ -63,5 +63,41 @@ export async function saveProject(project: ProjectData, filename?: string): Prom
 
   if (!resp.ok) {
     throw new Error(`Save failed: ${resp.status} ${resp.statusText}`);
+  }
+}
+
+/**
+ * Fetch list of all saved projects
+ */
+export async function fetchProjects(): Promise<ProjectSummary[]> {
+  const resp = await fetch(`${API_BASE}/projects`);
+  if (!resp.ok) {
+    throw new Error(`Failed to fetch projects: ${resp.status} ${resp.statusText}`);
+  }
+  return resp.json();
+}
+
+/**
+ * Load a specific project from the backend
+ * @param filename - The project filename (with .json extension)
+ */
+export async function loadProjectFromServer(filename: string): Promise<ProjectData> {
+  const resp = await fetch(`${API_BASE}/projects/${encodeURIComponent(filename)}`);
+  if (!resp.ok) {
+    throw new Error(`Failed to load project: ${resp.status} ${resp.statusText}`);
+  }
+  return resp.json();
+}
+
+/**
+ * Delete a project from the backend
+ * @param filename - The project filename to delete
+ */
+export async function deleteProject(filename: string): Promise<void> {
+  const resp = await fetch(`${API_BASE}/projects/${encodeURIComponent(filename)}`, {
+    method: 'DELETE',
+  });
+  if (!resp.ok) {
+    throw new Error(`Failed to delete project: ${resp.status} ${resp.statusText}`);
   }
 }

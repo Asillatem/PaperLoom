@@ -226,3 +226,57 @@ async def save_project(req: SaveRequest):
 		await f.write(raw)
 	return JSONResponse({"status": "success", "savedPath": str(target.relative_to(Path.cwd()))})
 
+
+@app.get("/projects")
+async def list_projects() -> List[dict]:
+	"""List all saved projects with summary metadata."""
+	projects = []
+	for file in PROJECTS_DIR.glob("*.json"):
+		try:
+			async with aiofiles.open(file, "r", encoding="utf-8") as f:
+				content = await f.read()
+				data = json.loads(content)
+				projects.append({
+					"filename": file.name,
+					"name": data.get("metadata", {}).get("name", file.stem),
+					"created": data.get("metadata", {}).get("created"),
+					"modified": data.get("metadata", {}).get("modified"),
+					"nodeCount": len(data.get("nodes", [])),
+					"itemCount": len(data.get("selectedItemKeys", [])),
+				})
+		except Exception:
+			# Skip invalid files
+			continue
+
+	# Sort by modified date, newest first
+	projects.sort(key=lambda p: p.get("modified", 0) or 0, reverse=True)
+	return projects
+
+
+@app.get("/projects/{filename}")
+async def get_project(filename: str):
+	"""Load a specific project file."""
+	target = safe_resolve(PROJECTS_DIR, filename)
+
+	if not target.exists():
+		raise HTTPException(status_code=404, detail="Project not found")
+
+	if not str(target).endswith(".json"):
+		raise HTTPException(status_code=400, detail="Invalid file type")
+
+	async with aiofiles.open(target, "r", encoding="utf-8") as f:
+		content = await f.read()
+		return json.loads(content)
+
+
+@app.delete("/projects/{filename}")
+async def delete_project(filename: str):
+	"""Delete a project file."""
+	target = safe_resolve(PROJECTS_DIR, filename)
+
+	if not target.exists():
+		raise HTTPException(status_code=404, detail="Project not found")
+
+	target.unlink()
+	return {"status": "deleted", "filename": filename}
+

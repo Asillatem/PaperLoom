@@ -96,17 +96,89 @@ This plan moves from a "Local PDF Reader" to a "Cloud Research Browser."
 
 ---
 
+## Current: Multi-Page Workflow Implementation
+
+**Goal:** Transform from single-page app to multi-page workflow with React Router.
+
+### Routes
+| Route | Page | Purpose |
+|-------|------|---------|
+| `/` | HomePage | List saved projects, create new |
+| `/project/:id/items` | ItemSelectionPage | Select Zotero items for project |
+| `/project/:id/workspace` | WorkspacePage | Main annotation workspace |
+| `/library` | LibraryPage | Browse all Zotero items, sync |
+
+### Phase 1: Foundation (Router + Navigation) ✅
+- [x] Install react-router-dom
+- [x] Create `frontend/src/router.tsx`
+- [x] Update `frontend/src/main.tsx` to use RouterProvider
+- [x] Create `frontend/src/components/PageLayout.tsx`
+- [x] Create placeholder pages in `frontend/src/pages/`
+- [x] Move App.tsx content to WorkspacePage.tsx
+
+### Phase 2: Backend API ✅
+- [x] Add `GET /projects` endpoint (list all projects)
+- [x] Add `GET /projects/{filename}` endpoint (load project)
+- [x] Add `DELETE /projects/{filename}` endpoint
+- [x] Update `frontend/src/api.ts` with new functions
+
+### Phase 3: State Management ✅
+- [x] Add `currentProjectId` to store
+- [x] Add `selectedItemKeys` array to store
+- [x] Add selection actions (add/remove/set)
+- [x] Update `loadProject()` and `saveProject()`
+- [x] Update `ProjectData` type in types.ts
+
+### Phase 4: HomePage ✅
+- [x] Create `ProjectCard.tsx` component
+- [x] Implement HomePage with project grid
+- [x] Add load/delete project functionality
+- [x] Add "New Project" flow
+
+### Phase 5: Item Selection Page ✅
+- [x] Create `ItemCard.tsx` component
+- [x] Create `ItemGrid.tsx` component
+- [x] Implement ItemSelectionPage
+- [x] Wire up item selection to store
+
+### Phase 6: Workspace Updates ✅
+- [x] Modify PDFLibrarySidebar to filter by selectedItemKeys
+- [x] Create `QuickAddModal.tsx`
+- [x] Add "+ Add Items" button to sidebar
+
+### Phase 7: Library Page ✅
+- [x] Implement LibraryPage (full Zotero overview)
+- [x] Add sync functionality
+
+### Phase 8: Polish ✅
+- [x] Handle URL direct access (load project from URL)
+- [x] Add unsaved changes warning (useBlocker + beforeunload)
+- [x] Backward compatibility for old projects (empty selectedItemKeys shows all)
+
+---
+
 ## Backlog
 
-- [ ] Debug HTML files not appearing in file list #backend #bug
-- [ ] Debug why only 69 of 122 Zotero entries are showing #backend #bug
-- [ ] Add text selection support for HTML snapshots #frontend #feature
-- [ ] Add snippet creation from HTML content #frontend #feature
+### Priority: HTML Text Selection/Marking ✅
+- [x] **Add text selection support for HTML snapshots** #frontend #feature #priority
+  - Implemented by fetching HTML, injecting selection script, using postMessage
+  - Selection handler script injected into iframe via srcdoc
+- [x] Add snippet creation from HTML content #frontend #feature
+- [x] Add persistent highlights for HTML documents #frontend #feature
+
+### Other
+- [x] Debug HTML files not appearing in file list #backend #bug (resolved)
+- [x] Debug why only 69 of 122 Zotero entries are showing #backend #bug (resolved)
 
 ---
 
 ## Done
 
+- [x] Fix canvas cards to display item name instead of path #frontend (completed: 2026-01-09)
+- [x] Fix Jump to Source for both PDF and HTML files #frontend (completed: 2026-01-09)
+- [x] Implement HTML text selection and snippet creation #frontend (completed: 2026-01-09)
+- [x] Add persistent highlights for HTML documents #frontend (completed: 2026-01-09)
+- [x] Implement multi-page workflow with React Router #frontend (completed: 2026-01-09)
 - [x] Implement inline text highlighting for PDFs #frontend (completed: 2026-01-06)
 - [x] Implement canvas node connections with Bezier curves #frontend (completed: 2026-01-06)
 - [x] Add comments system with popover UI #frontend (completed: 2026-01-06)

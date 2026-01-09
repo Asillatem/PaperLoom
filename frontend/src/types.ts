@@ -51,7 +51,9 @@ export interface Comment {
 // Snippet node data structure (matches spec)
 export interface SnippetNodeData {
   label: string; // Extracted text content
-  sourcePdf: string; // Filename from Zotero
+  sourcePdf: string; // Zotero attachment key or path
+  sourceName?: string; // Item title (for display)
+  sourceType?: 'pdf' | 'html'; // File type
   location: PDFLocation;
   comments: Comment[]; // Node comments
 }
@@ -113,4 +115,15 @@ export interface ProjectData {
     currentPage: number;
     scale: number;
   };
+  selectedItemKeys: string[]; // Zotero attachment keys included in project
+}
+
+// Summary info for project list (lighter than full ProjectData)
+export interface ProjectSummary {
+  filename: string;         // e.g., "My Research.json"
+  name: string;
+  created: number;
+  modified: number;
+  nodeCount: number;
+  itemCount: number;        // Number of selected items
 }

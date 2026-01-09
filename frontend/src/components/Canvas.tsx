@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useState, useMemo } from 'react';
 import ReactFlow, {
   Background,
   Controls,
@@ -22,12 +22,26 @@ export function Canvas() {
   const storeOnEdgesChange = useAppStore((state) => state.onEdgesChange);
   const storeOnConnect = useAppStore((state) => state.onConnect);
 
+  // Track selected node to bring it to front
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+
+  // Add zIndex to nodes - selected node gets highest z-index
+  const nodesWithZIndex = useMemo(() => {
+    return nodes.map((node) => ({
+      ...node,
+      zIndex: node.id === selectedNodeId ? 1000 : 0,
+    }));
+  }, [nodes, selectedNodeId]);
+
   const onNodesChange: OnNodesChange = useCallback(
     (changes) => {
-      // Apply changes to update node positions
+      // Apply changes to update node positions and track selection
       changes.forEach((change) => {
         if (change.type === 'position' && change.position) {
           updateNodePosition(change.id, change.position);
+        }
+        if (change.type === 'select' && change.selected) {
+          setSelectedNodeId(change.id);
         }
       });
     },
@@ -51,7 +65,7 @@ export function Canvas() {
   return (
     <div className="h-full w-full bg-gray-50">
       <ReactFlow
-        nodes={nodes}
+        nodes={nodesWithZIndex}
         edges={edges}
         nodeTypes={nodeTypes}
         onNodesChange={onNodesChange}

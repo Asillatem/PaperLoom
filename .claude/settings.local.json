@@ -34,7 +34,8 @@
       "Bash(taskkill //F //PID 49996)",
       "Bash(taskkill:*)",
       "Bash(cmd.exe /c \"taskkill /F /PID 39572 & taskkill /F /PID 88516\")",
-      "Bash(powershell.exe -Command \"Stop-Process -Id 39572 -Force -ErrorAction SilentlyContinue; Stop-Process -Id 88516 -Force -ErrorAction SilentlyContinue\")"
+      "Bash(powershell.exe -Command \"Stop-Process -Id 39572 -Force -ErrorAction SilentlyContinue; Stop-Process -Id 88516 -Force -ErrorAction SilentlyContinue\")",
+      "Bash(\"C:\\\\Users\\\\JOG\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\Python310\\\\python.exe\" -m uvicorn main:app --reload --port 8000)"
     ]
   }
 }

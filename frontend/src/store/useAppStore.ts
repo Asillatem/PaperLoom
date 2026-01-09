@@ -32,6 +32,8 @@ interface AppStore {
 
   // Project State
   projectMetadata: ProjectMetadata;
+  currentProjectId: string | null;
+  selectedItemKeys: string[];  // Zotero attachment keys in project
   isDirty: boolean;
 
   // PDF Actions
@@ -40,7 +42,7 @@ interface AppStore {
   setPdfNumPages: (numPages: number) => void;
   setPdfScale: (scale: number) => void;
   setHighlightedRect: (rect: PDFLocation | null) => void;
-  jumpToSource: (pdfPath: string, location: PDFLocation) => void;
+  jumpToSource: (pdfPath: string, location: PDFLocation, sourceName?: string, sourceType?: 'pdf' | 'html') => void;
 
   // Canvas Node Actions
   addNode: (node: SnippetNode) => void;
@@ -71,9 +73,15 @@ interface AppStore {
 
   // Project Actions
   saveProject: () => Promise<void>;
-  loadProject: (data: ProjectData) => void;
+  loadProject: (data: ProjectData, projectId: string) => void;
   newProject: () => void;
   setProjectName: (name: string) => void;
+  setCurrentProjectId: (id: string | null) => void;
+
+  // Selected Items Actions
+  setSelectedItemKeys: (keys: string[]) => void;
+  addSelectedItemKey: (key: string) => void;
+  removeSelectedItemKey: (key: string) => void;
 }
 
 export const useAppStore = create<AppStore>()(
@@ -110,6 +118,8 @@ export const useAppStore = create<AppStore>()(
         modified: Date.now(),
         activePdf: null,
       },
+      currentProjectId: null,
+      selectedItemKeys: [],
       isDirty: false,
 
       // PDF Actions
@@ -161,23 +171,31 @@ export const useAppStore = create<AppStore>()(
           },
         })),
 
-      jumpToSource: (pdfPath, location) =>
+      jumpToSource: (pdfPath, location, sourceName, sourceType) =>
         set((state) => {
-          // Extract filename from path
-          const name = pdfPath.split(/[/\\]/).pop() || pdfPath;
+          // Use provided name or extract from path
+          const name = sourceName || pdfPath.split(/[/\\]/).pop() || pdfPath;
+          // Default to 'pdf' for backward compatibility
+          const type = sourceType || 'pdf';
 
-          // Check if we need to switch PDFs
+          // Check if we need to switch files
           const needsSwitch = state.selectedPdf?.path !== pdfPath;
 
           return {
             selectedPdf: needsSwitch
-              ? { name, path: pdfPath }
+              ? {
+                  key: pdfPath,
+                  name,
+                  filename: name,
+                  path: pdfPath,
+                  type,
+                }
               : state.selectedPdf,
             pdfViewerState: {
               ...state.pdfViewerState,
               currentPage: location.pageIndex + 1,
               highlightedRect: location,
-              // Reset numPages if switching PDFs (will be set when PDF loads)
+              // Reset numPages if switching files (will be set when file loads)
               numPages: needsSwitch ? null : state.pdfViewerState.numPages,
             },
             projectMetadata: needsSwitch
@@ -438,6 +456,7 @@ export const useAppStore = create<AppStore>()(
             currentPage: state.pdfViewerState.currentPage,
             scale: state.pdfViewerState.scale,
           },
+          selectedItemKeys: state.selectedItemKeys,
         };
 
         try {
@@ -461,9 +480,10 @@ export const useAppStore = create<AppStore>()(
         }
       },
 
-      loadProject: (data) =>
+      loadProject: (data, projectId) =>
         set({
           projectMetadata: data.metadata,
+          currentProjectId: projectId,
           // Ensure backward compatibility: initialize comments array for old nodes
           nodes: data.nodes.map((n) => ({
             ...n,
@@ -473,6 +493,7 @@ export const useAppStore = create<AppStore>()(
             },
           })),
           edges: data.edges || [], // Handle old projects without edges
+          selectedItemKeys: data.selectedItemKeys || [], // Handle old projects
           pdfViewerState: {
             currentPage: data.pdfState.currentPage,
             scale: data.pdfState.scale,
@@ -488,6 +509,8 @@ export const useAppStore = create<AppStore>()(
           edges: [],
           highlights: [],
           selectedPdf: null,
+          selectedItemKeys: [],
+          currentProjectId: null,
           pdfViewerState: {
             currentPage: 1,
             numPages: null,
@@ -512,6 +535,30 @@ export const useAppStore = create<AppStore>()(
           },
           isDirty: true,
         })),
+
+      setCurrentProjectId: (id) =>
+        set({ currentProjectId: id }),
+
+      // Selected Items Actions
+      setSelectedItemKeys: (keys) =>
+        set({
+          selectedItemKeys: keys,
+          isDirty: true,
+        }),
+
+      addSelectedItemKey: (key) =>
+        set((state) => ({
+          selectedItemKeys: state.selectedItemKeys.includes(key)
+            ? state.selectedItemKeys
+            : [...state.selectedItemKeys, key],
+          isDirty: true,
+        })),
+
+      removeSelectedItemKey: (key) =>
+        set((state) => ({
+          selectedItemKeys: state.selectedItemKeys.filter((k) => k !== key),
+          isDirty: true,
+        })),
     }),
     {
       name: 'liquid-science-storage',
@@ -521,6 +568,8 @@ export const useAppStore = create<AppStore>()(
         edges: state.edges,
         highlights: state.highlights,
         projectMetadata: state.projectMetadata,
+        currentProjectId: state.currentProjectId,
+        selectedItemKeys: state.selectedItemKeys,
         selectedPdf: state.selectedPdf,
         pdfViewerState: {
           scale: state.pdfViewerState.scale,

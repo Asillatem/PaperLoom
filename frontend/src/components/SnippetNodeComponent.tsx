@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Handle, Position } from 'reactflow';
 import type { NodeProps } from 'reactflow';
-import { FileText, MessageSquare } from 'lucide-react';
+import { FileText, Globe, MessageSquare } from 'lucide-react';
 import type { SnippetNodeData } from '../types';
 import { useAppStore } from '../store/useAppStore';
 import { ContextMenu } from './ContextMenu';
@@ -20,8 +20,7 @@ export function SnippetNodeComponent({ data, selected, id }: NodeProps<SnippetNo
 
   const handleJumpToSource = (e: React.MouseEvent) => {
     e.stopPropagation();
-    // Jump to the source PDF and page, switching documents if needed
-    jumpToSource(data.sourcePdf, data.location);
+    jumpToSource(data.sourcePdf, data.location, data.sourceName, data.sourceType);
   };
 
   const handleContextMenu = (e: React.MouseEvent) => {
@@ -36,7 +35,6 @@ export function SnippetNodeComponent({ data, selected, id }: NodeProps<SnippetNo
     removeNode(id);
   };
 
-  // Close context menu on outside click
   useEffect(() => {
     const handleClickOutside = () => setShowContextMenu(false);
     if (showContextMenu) {
@@ -45,58 +43,59 @@ export function SnippetNodeComponent({ data, selected, id }: NodeProps<SnippetNo
     }
   }, [showContextMenu]);
 
-  // Extract filename from path
-  const filename = data.sourcePdf.split(/[/\\]/).pop() || data.sourcePdf;
+  const displayName = data.sourceName || data.sourcePdf.split(/[/\\]/).pop() || data.sourcePdf;
+  const isHtml = data.sourceType === 'html';
+  const SourceIcon = isHtml ? Globe : FileText;
 
-  // Truncate long text for display
   const displayText =
     data.label.length > 200 ? data.label.substring(0, 200) + '...' : data.label;
 
   return (
     <>
-      {/* Connection handles */}
+      {/* Connection handles - Swiss blue */}
       <Handle
         type="target"
         position={Position.Top}
         id="top"
-        className="!w-3 !h-3 !bg-blue-500 !border-2 !border-white snippet-handle"
+        className="!w-3 !h-3 !bg-blue-900 !border-2 !border-white !rounded-none snippet-handle"
       />
       <Handle
         type="source"
         position={Position.Bottom}
         id="bottom"
-        className="!w-3 !h-3 !bg-blue-500 !border-2 !border-white snippet-handle"
+        className="!w-3 !h-3 !bg-blue-900 !border-2 !border-white !rounded-none snippet-handle"
       />
       <Handle
         type="target"
         position={Position.Left}
         id="left"
-        className="!w-3 !h-3 !bg-blue-500 !border-2 !border-white snippet-handle"
+        className="!w-3 !h-3 !bg-blue-900 !border-2 !border-white !rounded-none snippet-handle"
       />
       <Handle
         type="source"
         position={Position.Right}
         id="right"
-        className="!w-3 !h-3 !bg-blue-500 !border-2 !border-white snippet-handle"
+        className="!w-3 !h-3 !bg-blue-900 !border-2 !border-white !rounded-none snippet-handle"
       />
 
+      {/* Card - Swiss Structure with spine */}
       <div
         onContextMenu={handleContextMenu}
         className={`
-          bg-white rounded-lg shadow-lg p-4 border-2 transition-all
-          ${selected ? 'border-blue-500 shadow-xl' : 'border-gray-300'}
+          bg-white shadow-sm p-4 rounded-none border-l-4 transition-all
+          ${selected ? 'border-l-blue-900 shadow-lg ring-2 ring-blue-900' : 'border-l-blue-900'}
           min-w-[220px] max-w-[400px]
         `}
       >
-        {/* Header with source info and comment badge */}
-        <div className="flex items-center gap-2 mb-2 pb-2 border-b border-gray-200">
-          <FileText className="w-4 h-4 text-gray-500 flex-shrink-0" />
+        {/* Header with source info */}
+        <div className="flex items-center gap-2 mb-3 pb-2 border-b border-neutral-200">
+          <SourceIcon className={`w-4 h-4 flex-shrink-0 ${isHtml ? 'text-green-600' : 'text-blue-900'}`} />
           <div className="flex-1 min-w-0">
-            <div className="text-xs text-gray-600 truncate" title={filename}>
-              {filename}
+            <div className="text-xs font-bold text-neutral-800 truncate" title={displayName}>
+              {displayName}
             </div>
-            <div className="text-xs text-gray-400">
-              Page {data.location.pageIndex + 1}
+            <div className="text-xs text-neutral-500">
+              {isHtml ? 'HTML Snapshot' : `Page ${data.location.pageIndex + 1}`}
             </div>
           </div>
 
@@ -107,11 +106,11 @@ export function SnippetNodeComponent({ data, selected, id }: NodeProps<SnippetNo
                 e.stopPropagation();
                 setShowCommentPopover(!showCommentPopover);
               }}
-              className="relative p-1 hover:bg-gray-100 rounded transition-colors"
+              className="relative p-1 hover:bg-blue-50 rounded-none transition-colors"
               title={`${comments.length} comment${comments.length !== 1 ? 's' : ''}`}
             >
-              <MessageSquare className="w-4 h-4 text-blue-500" />
-              <span className="absolute -top-1 -right-1 bg-blue-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">
+              <MessageSquare className="w-4 h-4 text-blue-900" />
+              <span className="absolute -top-1 -right-1 bg-blue-900 text-white text-[10px] font-bold rounded-none w-4 h-4 flex items-center justify-center">
                 {comments.length}
               </span>
             </button>
@@ -119,15 +118,15 @@ export function SnippetNodeComponent({ data, selected, id }: NodeProps<SnippetNo
         </div>
 
         {/* Extracted text content */}
-        <div className="text-sm text-gray-800 whitespace-pre-wrap mb-3">
+        <div className="text-sm text-neutral-800 whitespace-pre-wrap mb-3 leading-relaxed">
           {displayText}
         </div>
 
         {/* Footer with actions */}
-        <div className="flex gap-2 pt-2 border-t border-gray-100">
+        <div className="flex gap-3 pt-2 border-t border-neutral-100">
           <button
             onClick={handleJumpToSource}
-            className="text-xs text-blue-600 hover:text-blue-800 hover:underline transition-colors"
+            className="text-xs font-bold text-blue-900 hover:underline transition-colors uppercase tracking-wide"
           >
             Jump to source
           </button>
@@ -137,7 +136,7 @@ export function SnippetNodeComponent({ data, selected, id }: NodeProps<SnippetNo
                 e.stopPropagation();
                 setShowCommentPopover(true);
               }}
-              className="text-xs text-gray-500 hover:text-gray-700 transition-colors"
+              className="text-xs text-neutral-500 hover:text-neutral-700 transition-colors"
             >
               Add comment
             </button>
