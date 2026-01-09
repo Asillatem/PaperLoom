@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
-import { FileText, Globe, Save, FolderOpen, FilePlus } from 'lucide-react';
-import { fetchFiles } from '../api';
+import { FileText, Globe, Save, FilePlus, RefreshCw } from 'lucide-react';
+import { fetchFiles, syncLibrary } from '../api';
 import type { FileEntry } from '../api';
 import { useAppStore } from '../store/useAppStore';
 
 export function PDFLibrarySidebar() {
   const [files, setFiles] = useState<FileEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const selectedPdf = useAppStore((state) => state.selectedPdf);
@@ -30,6 +31,19 @@ export function PDFLibrarySidebar() {
       setError(err instanceof Error ? err.message : 'Failed to load files');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSync = async () => {
+    try {
+      setSyncing(true);
+      setError(null);
+      await syncLibrary();
+      await loadFiles();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Sync failed');
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -93,9 +107,24 @@ export function PDFLibrarySidebar() {
       {/* File Library */}
       <div className="flex-1 overflow-y-auto">
         <div className="p-3">
-          <h3 className="text-sm font-medium text-gray-700 mb-2">
-            File Library
-          </h3>
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-medium text-gray-700">
+              Zotero Library
+            </h3>
+            <button
+              onClick={handleSync}
+              disabled={syncing}
+              className={`flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors ${
+                syncing
+                  ? 'bg-blue-100 text-blue-600 cursor-wait'
+                  : 'bg-gray-100 hover:bg-gray-200 text-gray-600'
+              }`}
+              title="Sync from Zotero"
+            >
+              <RefreshCw className={`w-3 h-3 ${syncing ? 'animate-spin' : ''}`} />
+              {syncing ? 'Syncing...' : 'Sync'}
+            </button>
+          </div>
 
           {loading && (
             <div className="text-sm text-gray-500 py-4 text-center">
@@ -117,7 +146,14 @@ export function PDFLibrarySidebar() {
 
           {!loading && !error && files.length === 0 && (
             <div className="text-sm text-gray-500 py-4 text-center">
-              No files found
+              <p className="mb-2">No files cached</p>
+              <button
+                onClick={handleSync}
+                disabled={syncing}
+                className="text-xs text-blue-600 hover:underline"
+              >
+                Click Sync to load from Zotero
+              </button>
             </div>
           )}
 

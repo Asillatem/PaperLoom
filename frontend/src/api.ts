@@ -3,47 +3,51 @@ import type { ProjectData, FileEntry } from './types';
 // Re-export FileEntry for backward compatibility
 export type { FileEntry };
 
+const API_BASE = 'http://localhost:8000';
+
 export async function fetchFiles(): Promise<FileEntry[]> {
-  const resp = await fetch('http://localhost:8000/files')
+  const resp = await fetch(`${API_BASE}/files`)
   if (!resp.ok) {
     throw new Error(`Failed to fetch files: ${resp.status} ${resp.statusText}`)
   }
   const data = await resp.json()
   if (!Array.isArray(data)) return []
 
-  // Backend may return Windows paths or Zotero-style subpaths.
-  // Normalize to a flat list of { name, path, type }
-  const entries: FileEntry[] = data.map((it: any) => {
-    const raw = it.filename ?? it.path ?? String(it)
-    // split on both forward and backward slashes
-    const parts = raw.split(/[/\\\\]+/)
-    const name = parts[parts.length - 1]
-    // Default to 'pdf' for backward compatibility
-    const type = it.type === 'html' ? 'html' : 'pdf'
-    return { name, path: raw, type, size: it.size, modified: it.modified }
-  })
+  // Map backend response to FileEntry
+  const entries: FileEntry[] = data.map((it: any) => ({
+    key: it.key,
+    name: it.name || it.filename || 'Untitled',
+    filename: it.filename || '',
+    path: it.key,  // Use key as path for compatibility
+    type: it.type === 'html' ? 'html' : 'pdf',
+    parentKey: it.parentKey,
+    itemType: it.itemType,
+  }))
   return entries
 }
 
 /**
- * Get the URL to stream a PDF file from the backend
- * @param filename - The PDF filename or path
- * @returns URL to access the PDF
+ * Sync library from Zotero API (refreshes cache)
  */
-export function getPdfUrl(filename: string): string {
-  const encoded = encodeURIComponent(filename);
-  return `http://localhost:8000/pdf/${encoded}`;
+export async function syncLibrary(): Promise<void> {
+  const resp = await fetch(`${API_BASE}/sync`, { method: 'POST' })
+  if (!resp.ok) {
+    throw new Error(`Sync failed: ${resp.status} ${resp.statusText}`)
+  }
 }
 
 /**
- * Get the URL to stream an HTML file from the backend
- * @param filename - The HTML filename or path
- * @returns URL to access the HTML
+ * Get the URL to stream a file (PDF or HTML) from the backend
+ * @param key - The Zotero attachment key
+ * @returns URL to access the file
  */
-export function getHtmlUrl(filename: string): string {
-  const encoded = encodeURIComponent(filename);
-  return `http://localhost:8000/html/${encoded}`;
+export function getFileUrl(key: string): string {
+  return `${API_BASE}/file/${encodeURIComponent(key)}`;
 }
+
+// Legacy aliases for backward compatibility
+export const getPdfUrl = getFileUrl;
+export const getHtmlUrl = getFileUrl;
 
 /**
  * Save the current project to the backend

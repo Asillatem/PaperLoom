@@ -3,6 +3,21 @@ from typing import Optional, List
 from datetime import datetime
 
 
+class CachedZoteroItem(SQLModel, table=True):
+    """Cached Zotero library item for fast loading."""
+    __tablename__ = "cached_zotero_item"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    key: str = Field(index=True, unique=True)  # Zotero attachment key
+    parent_key: str = Field(index=True)  # Parent item key
+    name: str  # Item title
+    filename: str  # Original filename
+    file_type: str  # 'pdf' or 'html'
+    item_type: Optional[str] = None  # Zotero item type
+    creators_json: Optional[str] = None  # JSON string of creators
+    cached_at: datetime = Field(default_factory=datetime.utcnow)
+
+
 class User(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     zotero_id: Optional[str] = Field(default=None, index=True)

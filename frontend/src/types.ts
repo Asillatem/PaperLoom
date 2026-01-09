@@ -1,8 +1,12 @@
 // File entry from backend
 export interface FileEntry {
-  name: string;
-  path: string;
+  key: string;        // Zotero attachment key (used for fetching)
+  name: string;       // Item title
+  filename: string;   // Original filename
+  path: string;       // Alias for key (backward compat)
   type: 'pdf' | 'html';
+  parentKey?: string;
+  itemType?: string;
   size?: number;
   modified?: number;
 }

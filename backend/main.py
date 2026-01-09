@@ -1,18 +1,21 @@
 from dotenv import load_dotenv
 load_dotenv()  # Load .env file before accessing env vars
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from sqlmodel import Session, select
 import os
 from pathlib import Path
 import aiofiles
 import json
 from typing import List, Optional
+from datetime import datetime
 
-from database import create_db_and_tables
+from database import create_db_and_tables, get_session, engine
 from services.zotero import get_zotero_service
+from models import CachedZoteroItem
 import models  # noqa: F401 - imported for SQLModel metadata
 
 
@@ -59,10 +62,48 @@ async def startup_event():
 
 
 @app.get("/files")
-async def list_files(limit: int = 100) -> List[dict]:
+async def list_files(limit: int = 0) -> List[dict]:
 	"""
-	List items from Zotero library with their attachments.
+	List items from cached Zotero library.
 	Returns a flat list of viewable files (PDFs and HTML snapshots).
+	Use POST /sync to refresh the cache from Zotero API.
+
+	Args:
+		limit: Max items to return. 0 means return all.
+	"""
+	with Session(engine) as session:
+		statement = select(CachedZoteroItem)
+		if limit > 0:
+			statement = statement.limit(limit)
+		items = session.exec(statement).all()
+
+		if not items:
+			# Cache is empty - return empty list, user should sync
+			return []
+
+		return [
+			{
+				"key": item.key,
+				"name": item.name,
+				"filename": item.filename,
+				"path": item.key,
+				"type": item.file_type,
+				"parentKey": item.parent_key,
+				"itemType": item.item_type,
+				"creators": json.loads(item.creators_json) if item.creators_json else [],
+			}
+			for item in items
+		]
+
+
+@app.post("/sync")
+async def sync_library(limit: int = 0) -> dict:
+	"""
+	Sync library from Zotero API and update local cache.
+	This fetches fresh data and stores it in the database.
+
+	Args:
+		limit: Max items to sync. 0 means sync entire library.
 	"""
 	zotero = get_zotero_service()
 
@@ -75,22 +116,32 @@ async def list_files(limit: int = 100) -> List[dict]:
 	try:
 		items = zotero.get_library_items(limit=limit)
 
-		# Flatten to a list of files (one entry per attachment)
-		files = []
-		for item in items:
-			for attachment in item.get("attachments", []):
-				files.append({
-					"key": attachment["key"],
-					"name": item["title"],
-					"filename": attachment.get("filename", ""),
-					"path": attachment["key"],  # Use key as path for compatibility
-					"type": attachment["type"],  # 'pdf' or 'html'
-					"parentKey": item["key"],
-					"itemType": item["itemType"],
-					"creators": item.get("creators", []),
-				})
+		with Session(engine) as session:
+			# Clear existing cache
+			session.exec(select(CachedZoteroItem)).all()
+			for existing in session.exec(select(CachedZoteroItem)).all():
+				session.delete(existing)
 
-		return files
+			# Insert new items
+			count = 0
+			for item in items:
+				for attachment in item.get("attachments", []):
+					cached = CachedZoteroItem(
+						key=attachment["key"],
+						parent_key=item["key"],
+						name=item["title"],
+						filename=attachment.get("filename", ""),
+						file_type=attachment["type"],
+						item_type=item["itemType"],
+						creators_json=json.dumps(item.get("creators", [])),
+						cached_at=datetime.utcnow(),
+					)
+					session.add(cached)
+					count += 1
+
+			session.commit()
+
+		return {"status": "success", "items_cached": count}
 
 	except ValueError as e:
 		raise HTTPException(status_code=503, detail=str(e))

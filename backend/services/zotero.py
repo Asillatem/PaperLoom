@@ -9,8 +9,9 @@ from pathlib import Path
 from typing import Optional
 from pyzotero import zotero
 
-# Cache directory for downloaded files
-CACHE_DIR = Path(os.environ.get("CACHE_DIR", "./cache"))
+# Cache directory for downloaded files (resolve to absolute path)
+_cache_env = os.environ.get("CACHE_DIR", "./cache")
+CACHE_DIR = Path(_cache_env).resolve()
 
 
 class ZoteroService:
@@ -39,15 +40,22 @@ class ZoteroService:
         """Check if Zotero credentials are configured."""
         return bool(self.user_id and self.api_key)
 
-    def get_library_items(self, limit: int = 100) -> list[dict]:
+    def get_library_items(self, limit: int = 0) -> list[dict]:
         """
         Fetch all items from Zotero library with their attachments.
         Returns a list of items with attachment metadata.
+
+        Args:
+            limit: Max items to fetch. 0 means fetch all items.
         """
         items = []
 
         # Fetch top-level items (not attachments themselves)
-        top_items = self.client.top(limit=limit)
+        # Use pyzotero's everything() for full library, or top() with limit
+        if limit == 0:
+            top_items = self.client.everything(self.client.top())
+        else:
+            top_items = self.client.top(limit=limit)
 
         for item in top_items:
             item_data = item.get("data", {})
@@ -138,21 +146,40 @@ class ZoteroService:
         Returns:
             tuple: (file_path, content_type)
         """
-        # Check cache first
+        import shutil
+
+        # Cache path is a directory containing the downloaded file
         cache_path = CACHE_DIR / attachment_key
 
-        if cache_path.exists():
-            # Determine content type from cached file
-            content_type = self._get_cached_content_type(cache_path)
-            file_path = self._get_servable_file(cache_path)
-            return file_path, content_type
+        if cache_path.exists() and cache_path.is_dir():
+            files = list(cache_path.iterdir())
+            if files:
+                # Already cached
+                content_type = self._get_cached_content_type(cache_path)
+                file_path = self._get_servable_file(cache_path)
+                return file_path, content_type
 
-        # Download from Zotero
-        cache_path.mkdir(parents=True, exist_ok=True)
+        # Ensure cache directory exists
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
         try:
-            # Dump attachment to cache directory
-            self.client.dump(attachment_key, str(cache_path))
+            # Get attachment info first to know the filename
+            attachment_info = self.client.item(attachment_key)
+            filename = attachment_info.get("data", {}).get("filename", "")
+
+            if not filename:
+                raise RuntimeError(f"No filename for attachment {attachment_key}")
+
+            # Create subdirectory for this attachment
+            cache_path.mkdir(parents=True, exist_ok=True)
+
+            # Download file content directly using file() method
+            file_content = self.client.file(attachment_key)
+
+            # Write to cache
+            dst_file = cache_path / filename
+            with open(dst_file, "wb") as f:
+                f.write(file_content)
 
             content_type = self._get_cached_content_type(cache_path)
             file_path = self._get_servable_file(cache_path)
@@ -160,8 +187,7 @@ class ZoteroService:
 
         except Exception as e:
             # Clean up on failure
-            if cache_path.exists():
-                import shutil
+            if cache_path.exists() and cache_path.is_dir():
                 shutil.rmtree(cache_path)
             raise RuntimeError(f"Failed to download attachment {attachment_key}: {e}")
 
