@@ -5,12 +5,12 @@ import type {
   PDFViewerState,
   SelectionState,
   ProjectMetadata,
-  SnippetNode,
   SnippetEdge,
   PDFLocation,
   ProjectData,
   PersistentHighlight,
-  Comment,
+  CanvasNode,
+  NoteNode,
 } from '../types';
 import type { Connection, EdgeChange } from 'reactflow';
 import { applyEdgeChanges } from 'reactflow';
@@ -21,7 +21,7 @@ interface AppStore {
   pdfViewerState: PDFViewerState;
 
   // Canvas State
-  nodes: SnippetNode[];
+  nodes: CanvasNode[];
   edges: SnippetEdge[];
 
   // Highlight State
@@ -45,9 +45,11 @@ interface AppStore {
   jumpToSource: (pdfPath: string, location: PDFLocation, sourceName?: string, sourceType?: 'pdf' | 'html') => void;
 
   // Canvas Node Actions
-  addNode: (node: SnippetNode) => void;
+  addNode: (node: CanvasNode) => void;
+  addNoteNode: (position: { x: number; y: number }, color?: NoteNode['data']['color']) => void;
   removeNode: (nodeId: string) => void;
   updateNodePosition: (nodeId: string, position: { x: number; y: number }) => void;
+  updateNoteContent: (nodeId: string, content: string) => void;
 
   // Canvas Edge Actions
   addEdge: (edge: SnippetEdge) => void;
@@ -219,6 +221,28 @@ export const useAppStore = create<AppStore>()(
           },
         })),
 
+      addNoteNode: (position, color = 'yellow') => {
+        const noteNode: NoteNode = {
+          id: `note-${Date.now()}`,
+          type: 'noteNode',
+          data: {
+            label: '',
+            color,
+            comments: [],
+          },
+          position,
+        };
+
+        set((state) => ({
+          nodes: [...state.nodes, noteNode],
+          isDirty: true,
+          projectMetadata: {
+            ...state.projectMetadata,
+            modified: Date.now(),
+          },
+        }));
+      },
+
       removeNode: (nodeId) =>
         set((state) => ({
           nodes: state.nodes.filter((n) => n.id !== nodeId),
@@ -239,6 +263,20 @@ export const useAppStore = create<AppStore>()(
             n.id === nodeId ? { ...n, position } : n
           ),
           isDirty: true,
+        })),
+
+      updateNoteContent: (nodeId, content) =>
+        set((state) => ({
+          nodes: state.nodes.map((n) =>
+            n.id === nodeId && n.type === 'noteNode'
+              ? { ...n, data: { ...n.data, label: content } }
+              : n
+          ),
+          isDirty: true,
+          projectMetadata: {
+            ...state.projectMetadata,
+            modified: Date.now(),
+          },
         })),
 
       // Edge Actions
@@ -337,7 +375,7 @@ export const useAppStore = create<AppStore>()(
                   },
                 }
               : n
-          ),
+          ) as CanvasNode[],
           isDirty: true,
           projectMetadata: {
             ...state.projectMetadata,
@@ -361,7 +399,7 @@ export const useAppStore = create<AppStore>()(
                   },
                 }
               : n
-          ),
+          ) as CanvasNode[],
           isDirty: true,
         })),
 
@@ -379,7 +417,7 @@ export const useAppStore = create<AppStore>()(
                   },
                 }
               : n
-          ),
+          ) as CanvasNode[],
           isDirty: true,
         })),
 
@@ -491,7 +529,7 @@ export const useAppStore = create<AppStore>()(
               ...n.data,
               comments: n.data.comments || [],
             },
-          })),
+          })) as CanvasNode[],
           edges: data.edges || [], // Handle old projects without edges
           selectedItemKeys: data.selectedItemKeys || [], // Handle old projects
           pdfViewerState: {

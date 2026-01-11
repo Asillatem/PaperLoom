@@ -85,7 +85,7 @@ export function PDFLibrarySidebar() {
   };
 
   return (
-    <aside className="w-64 h-full bg-white border-r border-neutral-300 flex flex-col">
+    <aside className="h-full bg-white border-r border-neutral-300 flex flex-col overflow-hidden">
       {/* Header - Swiss Style */}
       <div className="p-4 border-b-4 border-blue-900 bg-white">
         <h2 className="text-sm font-extrabold text-blue-900 uppercase tracking-wide mb-1">

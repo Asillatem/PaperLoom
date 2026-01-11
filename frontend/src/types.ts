@@ -58,6 +58,13 @@ export interface SnippetNodeData {
   comments: Comment[]; // Node comments
 }
 
+// Note/Post-it node data structure
+export interface NoteNodeData {
+  label: string; // Note content
+  color: 'yellow' | 'blue' | 'green' | 'pink' | 'purple'; // Post-it color
+  comments: Comment[]; // Node comments
+}
+
 // ReactFlow node with our custom data
 export interface SnippetNode {
   id: string;
@@ -68,6 +75,20 @@ export interface SnippetNode {
     y: number;
   };
 }
+
+// Note node for canvas
+export interface NoteNode {
+  id: string;
+  type: 'noteNode';
+  data: NoteNodeData;
+  position: {
+    x: number;
+    y: number;
+  };
+}
+
+// Union type for all canvas nodes
+export type CanvasNode = SnippetNode | NoteNode;
 
 // PDF viewer state
 export interface PDFViewerState {
@@ -108,7 +129,7 @@ export interface SnippetEdge {
 // Project data structure for save/load
 export interface ProjectData {
   metadata: ProjectMetadata;
-  nodes: SnippetNode[];
+  nodes: CanvasNode[]; // All canvas nodes (snippets and notes)
   edges: SnippetEdge[]; // Canvas connections
   pdfState: {
     activePdf: string | null;

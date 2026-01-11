@@ -166,10 +166,10 @@ export function PDFViewer() {
   }
 
   return (
-    <div ref={containerRef} className="h-full flex flex-col bg-gray-100">
-      <div className="flex-1 overflow-auto">
+    <div ref={containerRef} className="h-full w-full flex flex-col bg-neutral-100 overflow-hidden">
+      <div className="flex-1 overflow-auto min-h-0">
         <div className="flex justify-center p-4">
-          <div className="relative">
+          <div className="relative inline-block">
             <Document
               file={pdfUrl}
               onLoadSuccess={onDocumentLoadSuccess}

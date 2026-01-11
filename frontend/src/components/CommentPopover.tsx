@@ -75,30 +75,30 @@ export function CommentPopover({ nodeId, comments, onClose }: CommentPopoverProp
   return (
     <div
       ref={popoverRef}
-      className="absolute left-full top-0 ml-2 bg-white rounded-lg shadow-xl border border-gray-200 w-72 z-50"
+      className="absolute left-full top-0 ml-2 bg-white rounded-none shadow-xl border-l-4 border-blue-900 w-72 z-50 comment-popover-enter"
       onClick={(e) => e.stopPropagation()}
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200">
-        <span className="text-sm font-medium text-gray-700">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-neutral-200">
+        <span className="text-sm font-bold text-neutral-800 uppercase tracking-wide">
           Comments ({comments.length})
         </span>
         <button
           onClick={onClose}
-          className="p-1 hover:bg-gray-100 rounded transition-colors"
+          className="p-1 hover:bg-neutral-100 rounded-none transition-colors"
         >
-          <X className="w-4 h-4 text-gray-500" />
+          <X className="w-4 h-4 text-neutral-500" />
         </button>
       </div>
 
       {/* Comments list */}
       <div className="max-h-64 overflow-y-auto">
         {comments.length === 0 ? (
-          <div className="px-3 py-4 text-sm text-gray-400 text-center">
+          <div className="px-3 py-4 text-sm text-neutral-400 text-center">
             No comments yet
           </div>
         ) : (
-          <div className="divide-y divide-gray-100">
+          <div className="divide-y divide-neutral-100">
             {comments.map((comment) => (
               <div key={comment.id} className="px-3 py-2 group">
                 {editingId === comment.id ? (
@@ -106,20 +106,20 @@ export function CommentPopover({ nodeId, comments, onClose }: CommentPopoverProp
                     <textarea
                       value={editText}
                       onChange={(e) => setEditText(e.target.value)}
-                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-2 py-1 text-sm border border-neutral-300 rounded-none resize-none focus:outline-none focus:ring-1 focus:ring-blue-900 focus:border-blue-900"
                       rows={2}
                       autoFocus
                     />
                     <div className="flex gap-1 justify-end">
                       <button
                         onClick={() => setEditingId(null)}
-                        className="px-2 py-1 text-xs text-gray-500 hover:bg-gray-100 rounded"
+                        className="px-2 py-1 text-xs text-neutral-500 hover:bg-neutral-100 rounded-none"
                       >
                         Cancel
                       </button>
                       <button
                         onClick={() => handleSaveEdit(comment.id)}
-                        className="px-2 py-1 text-xs bg-blue-500 text-white hover:bg-blue-600 rounded flex items-center gap-1"
+                        className="px-2 py-1 text-xs bg-blue-900 text-white hover:bg-blue-800 rounded-none flex items-center gap-1"
                       >
                         <Check className="w-3 h-3" />
                         Save
@@ -128,25 +128,25 @@ export function CommentPopover({ nodeId, comments, onClose }: CommentPopoverProp
                   </div>
                 ) : (
                   <>
-                    <p className="text-sm text-gray-800 whitespace-pre-wrap">
+                    <p className="text-sm text-neutral-800 whitespace-pre-wrap">
                       {comment.text}
                     </p>
                     <div className="flex items-center justify-between mt-1">
-                      <span className="text-xs text-gray-400">
+                      <span className="text-xs text-neutral-400">
                         {formatTimestamp(comment.timestamp)}
                         {comment.edited && ' (edited)'}
                       </span>
                       <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
                         <button
                           onClick={() => handleEdit(comment)}
-                          className="p-1 hover:bg-gray-100 rounded"
+                          className="p-1 hover:bg-neutral-100 rounded-none"
                           title="Edit"
                         >
-                          <Edit2 className="w-3 h-3 text-gray-400" />
+                          <Edit2 className="w-3 h-3 text-neutral-400" />
                         </button>
                         <button
                           onClick={() => handleDelete(comment.id)}
-                          className="p-1 hover:bg-red-50 rounded"
+                          className="p-1 hover:bg-red-50 rounded-none"
                           title="Delete"
                         >
                           <Trash2 className="w-3 h-3 text-red-400" />
@@ -162,14 +162,14 @@ export function CommentPopover({ nodeId, comments, onClose }: CommentPopoverProp
       </div>
 
       {/* New comment form */}
-      <form onSubmit={handleSubmit} className="p-3 border-t border-gray-200">
+      <form onSubmit={handleSubmit} className="p-3 border-t border-neutral-200 bg-neutral-50">
         <div className="flex gap-2">
           <textarea
             ref={inputRef}
             value={newComment}
             onChange={(e) => setNewComment(e.target.value)}
             placeholder="Add a comment..."
-            className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="flex-1 px-2 py-1 text-sm border border-neutral-300 rounded-none resize-none focus:outline-none focus:ring-1 focus:ring-blue-900 focus:border-blue-900"
             rows={2}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
@@ -180,13 +180,13 @@ export function CommentPopover({ nodeId, comments, onClose }: CommentPopoverProp
           <button
             type="submit"
             disabled={!newComment.trim()}
-            className="self-end p-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="self-end p-2 bg-blue-900 text-white rounded-none hover:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             title="Add comment (Ctrl+Enter)"
           >
             <Send className="w-4 h-4" />
           </button>
         </div>
-        <p className="text-xs text-gray-400 mt-1">Ctrl+Enter to submit</p>
+        <p className="text-xs text-neutral-400 mt-1">Ctrl+Enter to submit</p>
       </form>
     </div>
   );

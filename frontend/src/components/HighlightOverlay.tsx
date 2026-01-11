@@ -5,7 +5,7 @@ import { pdfRectToDomRect } from '../utils/coordinates';
 export function HighlightOverlay() {
   const pdfViewerState = useAppStore((state) => state.pdfViewerState);
   const setHighlightedRect = useAppStore((state) => state.setHighlightedRect);
-  const [pageHeight, setPageHeight] = useState<number>(842); // Default A4 height
+  const [pageHeight] = useState<number>(842); // Default A4 height
 
   const { highlightedRect, scale } = pdfViewerState;
 

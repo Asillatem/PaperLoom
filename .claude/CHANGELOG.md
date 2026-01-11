@@ -4,6 +4,35 @@
 
 ---
 
+## 2026-01-10
+
+### Added
+- **Resizable panels** - 3-panel layout with drag handles using `react-resizable-panels`
+- **Note/Post-it nodes** - add notes to canvas via "Add Note" button or right-click context menu
+  - 5 colors: yellow, blue, green, pink, purple
+  - Editable content with double-click
+  - Full connection support (can link to snippets and other notes)
+- **Arrow markers on edges** - directional arrows showing relationship direction
+- **Swiss Structure design system** - complete UI overhaul
+  - Primary color: `blue-900` (#1e3a8a)
+  - Background: `neutral-200` (#e5e5e5)
+  - Zero border radius throughout (`rounded-none`)
+  - Spine accent cards (`border-l-4 border-blue-900`)
+  - Reusable CSS component classes (`btn-primary`, `btn-secondary`, `card-spine`, `input-field`, `badge`, `alert-box`)
+
+### Fixed
+- PDF zoom no longer affects panel size/position (proper overflow containment)
+
+### Changed
+- Updated all pages: HomePage, ItemSelectionPage, LibraryPage, WorkspacePage
+- Updated components: PageLayout, PDFLibrarySidebar, SnippetNodeComponent, QuickAddModal, ContextMenu, CommentPopover, PDFControls
+- Navigation bar now dark blue (`bg-blue-900`) with white text
+- Cards use hover translate effect (`hover:translate-x-1`)
+- Uppercase headings with letter tracking for institutional feel
+- Canvas now uses `ReactFlowProvider` wrapper for hook access
+
+---
+
 ## 2026-01-09
 
 ### Added

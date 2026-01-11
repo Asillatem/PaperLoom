@@ -207,9 +207,10 @@ export function HTMLViewer() {
   useEffect(() => {
     if (!iframeReady || !iframeRef.current?.contentWindow) return;
 
-    // Find active highlight (from jumpToSource)
+    // Find active highlight (from jumpToSource) - only check snippet nodes
     const activeNode = nodes.find(
       (n) =>
+        n.type === 'snippetNode' &&
         n.data.sourcePdf === selectedFile?.path &&
         highlightedRect?.pageIndex === n.data.location.pageIndex
     );
@@ -233,7 +234,7 @@ export function HTMLViewer() {
     }
 
     if (event.data?.type === 'HTML_TEXT_SELECTION') {
-      const { text, boundingRect, scrollPosition, pageHeight } = event.data.payload;
+      const { text, boundingRect, scrollPosition } = event.data.payload;
 
       // Create snippet node from HTML selection
       const nodeId = `node-${Date.now()}`;
@@ -324,7 +325,7 @@ export function HTMLViewer() {
   }
 
   return (
-    <div className="h-full w-full bg-white relative">
+    <div className="h-full w-full bg-white relative overflow-hidden">
       <iframe
         ref={iframeRef}
         srcDoc={htmlContent || ''}
@@ -333,7 +334,7 @@ export function HTMLViewer() {
         title="HTML Snapshot"
       />
       {/* Selection hint */}
-      <div className="absolute bottom-4 right-4 bg-green-100 text-green-800 text-xs px-3 py-1.5 rounded-full shadow-sm pointer-events-none opacity-75">
+      <div className="absolute bottom-4 right-4 bg-green-100 text-green-700 text-xs font-medium px-3 py-1.5 rounded-none shadow-sm pointer-events-none opacity-75">
         Select text to create snippets
       </div>
     </div>

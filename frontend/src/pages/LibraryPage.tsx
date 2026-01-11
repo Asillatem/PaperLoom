@@ -51,25 +51,25 @@ export function LibraryPage() {
 
   return (
     <PageLayout>
-      <div className="h-full flex flex-col">
+      <div className="h-full flex flex-col bg-neutral-200">
         {/* Header */}
-        <div className="bg-white border-b border-gray-200 px-6 py-4">
+        <div className="bg-white border-b-4 border-blue-900 px-6 py-4">
           <div className="max-w-6xl mx-auto flex items-center justify-between">
             <div>
-              <h1 className="text-xl font-semibold text-gray-900">
+              <h1 className="text-xl font-extrabold text-neutral-800 uppercase tracking-wide">
                 Zotero Library
               </h1>
-              <p className="text-sm text-gray-500 mt-1">
-                {items.length} items ({pdfCount} PDFs, {htmlCount} HTML snapshots)
+              <p className="text-sm text-neutral-600 mt-1">
+                {items.length} items <span className="text-neutral-400">({pdfCount} PDFs, {htmlCount} HTML snapshots)</span>
               </p>
             </div>
             <button
               onClick={handleSync}
               disabled={syncing}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+              className={`flex items-center gap-2 px-4 py-2 rounded-none transition-colors ${
                 syncing
-                  ? 'bg-blue-100 text-blue-600 cursor-wait'
-                  : 'bg-blue-600 text-white hover:bg-blue-700'
+                  ? 'bg-blue-100 text-blue-900 cursor-wait'
+                  : 'bg-blue-900 text-white hover:bg-blue-800'
               }`}
             >
               <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
@@ -79,16 +79,16 @@ export function LibraryPage() {
         </div>
 
         {/* Search */}
-        <div className="bg-white border-b border-gray-200 px-6 py-3">
+        <div className="bg-white border-b border-neutral-300 px-6 py-3">
           <div className="max-w-6xl mx-auto">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-neutral-400" />
               <input
                 type="text"
                 placeholder="Search library..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="input-field w-full pl-10 pr-4 py-2"
               />
             </div>
           </div>
@@ -98,17 +98,17 @@ export function LibraryPage() {
         <div className="flex-1 overflow-auto px-6 py-6">
           <div className="max-w-6xl mx-auto">
             {loading && (
-              <div className="text-center py-12 text-gray-500">
+              <div className="text-center py-12 text-neutral-500">
                 Loading library...
               </div>
             )}
 
             {error && (
-              <div className="text-center py-12">
-                <p className="text-red-500 mb-4">{error}</p>
+              <div className="alert-box text-center py-8">
+                <p className="text-blue-900 mb-4">{error}</p>
                 <button
                   onClick={loadItems}
-                  className="text-blue-600 hover:underline"
+                  className="text-blue-900 font-bold hover:underline"
                 >
                   Try again
                 </button>
@@ -116,18 +116,18 @@ export function LibraryPage() {
             )}
 
             {!loading && !error && items.length === 0 && (
-              <div className="text-center py-16 bg-white rounded-xl border border-gray-200">
-                <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">
+              <div className="card text-center py-16 border-l-4 border-blue-900">
+                <FileText className="w-12 h-12 text-neutral-300 mx-auto mb-4" />
+                <h3 className="text-lg font-bold text-neutral-800 mb-2">
                   Library is empty
                 </h3>
-                <p className="text-gray-500 mb-6">
+                <p className="text-neutral-600 mb-6">
                   Click "Sync from Zotero" to load your library
                 </p>
                 <button
                   onClick={handleSync}
                   disabled={syncing}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  className="btn-primary inline-flex items-center gap-2"
                 >
                   <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
                   Sync from Zotero
@@ -136,7 +136,7 @@ export function LibraryPage() {
             )}
 
             {!loading && !error && filteredItems.length === 0 && items.length > 0 && (
-              <div className="text-center py-12 text-gray-500">
+              <div className="card text-center py-12 text-neutral-500 border-l-4 border-blue-900">
                 No items match your search
               </div>
             )}
@@ -145,29 +145,23 @@ export function LibraryPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                 {filteredItems.map((item) => {
                   const Icon = item.type === 'html' ? Globe : FileText;
-                  const iconColor = item.type === 'html' ? 'text-green-500' : 'text-blue-500';
+                  const iconColor = item.type === 'html' ? 'text-green-600' : 'text-blue-900';
 
                   return (
                     <div
                       key={item.key}
-                      className="p-4 rounded-lg border border-gray-200 bg-white hover:border-gray-300 transition-colors"
+                      className="card-spine p-4"
                     >
                       <div className="flex items-start gap-3">
                         <Icon className={`w-5 h-5 mt-0.5 flex-shrink-0 ${iconColor}`} />
                         <div className="flex-1 min-w-0">
-                          <h3 className="font-medium text-gray-900 text-sm line-clamp-2">
+                          <h3 className="font-medium text-neutral-800 text-sm line-clamp-2">
                             {item.name}
                           </h3>
-                          <p className="text-xs text-gray-500 mt-1 truncate">
+                          <p className="text-xs text-neutral-500 mt-1 truncate">
                             {item.filename}
                           </p>
-                          <span
-                            className={`inline-block mt-2 text-xs px-2 py-0.5 rounded ${
-                              item.type === 'html'
-                                ? 'bg-green-100 text-green-700'
-                                : 'bg-blue-100 text-blue-700'
-                            }`}
-                          >
+                          <span className="badge mt-2 inline-block">
                             {item.type.toUpperCase()}
                           </span>
                         </div>

@@ -4,7 +4,6 @@ import {
   ZoomIn,
   ZoomOut,
   Maximize,
-  FileText,
   Globe,
 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
@@ -17,7 +16,6 @@ export function PDFControls() {
 
   const { currentPage, numPages, scale } = pdfViewerState;
   const isPdf = selectedFile?.type === 'pdf';
-  const isHtml = selectedFile?.type === 'html';
 
   const canGoPrev = currentPage > 1;
   const canGoNext = numPages ? currentPage < numPages : false;
@@ -54,7 +52,7 @@ export function PDFControls() {
   const filename = selectedFile?.name || 'Unknown';
 
   return (
-    <div className="flex items-center justify-between px-4 py-2 bg-white border-b border-gray-200">
+    <div className="flex items-center justify-between px-4 py-2 bg-white border-b border-neutral-300">
       {/* Left side: File info or Page Navigation */}
       <div className="flex items-center gap-2">
         {isPdf ? (
@@ -62,33 +60,33 @@ export function PDFControls() {
             <button
               onClick={handlePrevPage}
               disabled={!canGoPrev}
-              className="p-1.5 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              className="p-1.5 rounded-none hover:bg-neutral-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
               title="Previous page"
             >
-              <ChevronLeft className="w-5 h-5" />
+              <ChevronLeft className="w-5 h-5 text-neutral-700" />
             </button>
 
-            <span className="text-sm text-gray-700 min-w-[100px] text-center">
+            <span className="text-sm font-medium text-neutral-700 min-w-[100px] text-center">
               Page {currentPage} {numPages ? `of ${numPages}` : ''}
             </span>
 
             <button
               onClick={handleNextPage}
               disabled={!canGoNext}
-              className="p-1.5 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              className="p-1.5 rounded-none hover:bg-neutral-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
               title="Next page"
             >
-              <ChevronRight className="w-5 h-5" />
+              <ChevronRight className="w-5 h-5 text-neutral-700" />
             </button>
           </>
         ) : (
           <div className="flex items-center gap-2">
-            <Globe className="w-4 h-4 text-green-500" />
-            <span className="text-sm text-gray-700 truncate max-w-[200px]" title={filename}>
+            <Globe className="w-4 h-4 text-green-600" />
+            <span className="text-sm font-medium text-neutral-700 truncate max-w-[200px]" title={filename}>
               {filename}
             </span>
-            <span className="text-xs text-green-600 bg-green-50 px-2 py-0.5 rounded">
-              HTML Snapshot
+            <span className="badge bg-green-100 text-green-700">
+              HTML
             </span>
           </div>
         )}
@@ -99,29 +97,29 @@ export function PDFControls() {
         <div className="flex items-center gap-2">
           <button
             onClick={handleZoomOut}
-            className="p-1.5 rounded hover:bg-gray-100 transition-colors"
+            className="p-1.5 rounded-none hover:bg-neutral-100 transition-colors"
             title="Zoom out"
           >
-            <ZoomOut className="w-5 h-5" />
+            <ZoomOut className="w-5 h-5 text-neutral-700" />
           </button>
 
-          <span className="text-sm text-gray-700 min-w-[60px] text-center font-mono">
+          <span className="text-sm font-mono text-neutral-700 min-w-[60px] text-center">
             {Math.round(scale * 100)}%
           </span>
 
           <button
             onClick={handleZoomIn}
-            className="p-1.5 rounded hover:bg-gray-100 transition-colors"
+            className="p-1.5 rounded-none hover:bg-neutral-100 transition-colors"
             title="Zoom in"
           >
-            <ZoomIn className="w-5 h-5" />
+            <ZoomIn className="w-5 h-5 text-neutral-700" />
           </button>
 
-          <div className="h-4 w-px bg-gray-300 mx-1" />
+          <div className="h-4 w-px bg-neutral-300 mx-1" />
 
           <button
             onClick={handleFitWidth}
-            className="px-2 py-1 text-xs rounded hover:bg-gray-100 transition-colors"
+            className="px-2 py-1 text-xs font-medium rounded-none hover:bg-neutral-100 transition-colors text-neutral-700"
             title="Fit width (100%)"
           >
             Fit Width
@@ -129,10 +127,10 @@ export function PDFControls() {
 
           <button
             onClick={handleFitPage}
-            className="p-1.5 rounded hover:bg-gray-100 transition-colors"
+            className="p-1.5 rounded-none hover:bg-neutral-100 transition-colors"
             title="Fit page (80%)"
           >
-            <Maximize className="w-5 h-5" />
+            <Maximize className="w-5 h-5 text-neutral-700" />
           </button>
         </div>
       )}

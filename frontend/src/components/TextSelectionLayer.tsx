@@ -7,7 +7,7 @@ import {
   normalizeRects,
 } from '../utils/highlightUtils';
 import { domRectToPdfRect } from '../utils/coordinates';
-import type { SnippetNode, HighlightRect } from '../types';
+import type { SnippetNode } from '../types';
 
 /**
  * TextSelectionLayer handles native browser text selection on the PDF text layer.
@@ -99,6 +99,7 @@ export function TextSelectionLayer() {
     // Also add to highlights for rendering
     addHighlight({
       id: nodeId,
+      pdfPath: selectedPdf?.path || '',
       pageIndex: currentPage - 1,
       rects: normalizedRects,
     });

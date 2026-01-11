@@ -1,5 +1,6 @@
 import { useEffect, useCallback } from 'react';
 import { useParams, useNavigate, useBlocker } from 'react-router-dom';
+import { Panel, Group, Separator } from 'react-resizable-panels';
 import { PDFLibrarySidebar } from '../components/PDFLibrarySidebar';
 import { PDFViewer } from '../components/PDFViewer';
 import { HTMLViewer } from '../components/HTMLViewer';
@@ -20,7 +21,7 @@ export function WorkspacePage() {
   // Block navigation when there are unsaved changes
   const blocker = useBlocker(
     useCallback(
-      ({ currentLocation, nextLocation }) =>
+      ({ currentLocation, nextLocation }: { currentLocation: { pathname: string }; nextLocation: { pathname: string } }) =>
         isDirty && currentLocation.pathname !== nextLocation.pathname,
       [isDirty]
     )
@@ -78,37 +79,48 @@ export function WorkspacePage() {
   }, [projectId, currentProjectId, loadProject, navigate, setCurrentProjectId]);
 
   return (
-    <div className="flex h-screen w-full bg-gray-50">
-      {/* Sidebar: File Library */}
-      <PDFLibrarySidebar />
+    <div className="h-screen w-full bg-neutral-200 flex">
+      {/* Fixed Sidebar: File Library */}
+      <div className="w-64 flex-shrink-0 h-full">
+        <PDFLibrarySidebar />
+      </div>
 
-      {/* Main Content: File Viewer + Canvas */}
-      <div className="flex-1 flex h-full">
+      {/* Resizable Panels for Viewer and Canvas */}
+      <Group orientation="horizontal" className="flex-1 h-full">
         {/* File Viewer Panel */}
-        <div className="flex-1 flex flex-col border-r bg-gray-100">
-          {selectedFile ? (
-            <>
-              <PDFControls />
-              <div className="flex-1 relative overflow-hidden">
-                {selectedFile.type === 'pdf' && <PDFViewer />}
-                {selectedFile.type === 'html' && <HTMLViewer />}
+        <Panel defaultSize={50} minSize={20}>
+          <div className="h-full flex flex-col bg-neutral-100 border-r border-neutral-300 overflow-hidden">
+            {selectedFile ? (
+              <>
+                <PDFControls />
+                <div className="flex-1 relative overflow-hidden">
+                  {selectedFile.type === 'pdf' && <PDFViewer />}
+                  {selectedFile.type === 'html' && <HTMLViewer />}
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center justify-center h-full text-neutral-500">
+                <div className="text-center">
+                  <p className="text-lg font-medium mb-2">No file selected</p>
+                  <p className="text-sm">Select a file from the library to begin</p>
+                </div>
               </div>
-            </>
-          ) : (
-            <div className="flex items-center justify-center h-full text-gray-500">
-              <div className="text-center">
-                <p className="text-lg mb-2">No file selected</p>
-                <p className="text-sm">Select a file from the library to begin</p>
-              </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        </Panel>
+
+        <Separator
+          className="panel-resize-handle"
+          style={{ width: '8px', cursor: 'col-resize' }}
+        />
 
         {/* Canvas Panel */}
-        <div className="flex-1 bg-white">
-          <Canvas />
-        </div>
-      </div>
+        <Panel defaultSize={50} minSize={20}>
+          <div className="h-full bg-white overflow-hidden">
+            <Canvas />
+          </div>
+        </Panel>
+      </Group>
     </div>
   );
 }

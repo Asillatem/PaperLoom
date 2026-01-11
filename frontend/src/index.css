@@ -151,3 +151,48 @@
 .overflow-y-auto::-webkit-scrollbar-thumb:hover {
   background-color: rgba(0, 0, 0, 0.3);
 }
+
+/* ===== Panel Resize Handles ===== */
+.panel-resize-handle {
+  width: 8px;
+  flex-shrink: 0;
+  background-color: #d4d4d4;
+  cursor: col-resize;
+  transition: background-color 0.2s;
+  position: relative;
+}
+
+.panel-resize-handle:hover {
+  background-color: #1e3a8a;
+}
+
+.panel-resize-handle::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 4px;
+  height: 32px;
+  background: repeating-linear-gradient(
+    to bottom,
+    currentColor,
+    currentColor 2px,
+    transparent 2px,
+    transparent 4px
+  );
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.panel-resize-handle:hover::before {
+  opacity: 0.5;
+}
+
+.panel-resize-handle[data-resize-handle-state="drag"]::before {
+  opacity: 0.7;
+}
+
+.panel-resize-handle[data-resize-handle-state="drag"] {
+  background-color: #1e3a8a;
+}

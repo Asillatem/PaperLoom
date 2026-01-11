@@ -64,43 +64,33 @@ export function ItemSelectionPage() {
     item.filename.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Group items by parent (for better organization)
-  const groupedByParent = filteredItems.reduce((acc, item) => {
-    const parentKey = item.parentKey || 'other';
-    if (!acc[parentKey]) {
-      acc[parentKey] = [];
-    }
-    acc[parentKey].push(item);
-    return acc;
-  }, {} as Record<string, FileEntry[]>);
-
   return (
     <PageLayout title="Select Items">
-      <div className="h-full flex flex-col">
+      <div className="h-full flex flex-col bg-neutral-200">
         {/* Header */}
-        <div className="bg-white border-b border-gray-200 px-6 py-4">
+        <div className="bg-white border-b-4 border-blue-900 px-6 py-4">
           <div className="max-w-5xl mx-auto flex items-center justify-between">
             <div>
-              <h1 className="text-xl font-semibold text-gray-900">
-                Select Items for Your Project
+              <h1 className="text-xl font-extrabold text-neutral-800 uppercase tracking-wide">
+                Select Items
               </h1>
-              <p className="text-sm text-gray-500 mt-1">
+              <p className="text-sm text-neutral-600 mt-1">
                 Choose which Zotero items to include in this project
               </p>
             </div>
             <div className="flex items-center gap-3">
-              <span className="text-sm text-gray-500">
+              <span className="text-sm font-medium text-neutral-600">
                 {selectedItemKeys.length} selected
               </span>
               <button
                 onClick={handleSkip}
-                className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                className="btn-secondary px-4 py-2 text-sm"
               >
                 Skip
               </button>
               <button
                 onClick={handleContinue}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                className="btn-primary flex items-center gap-2 px-4 py-2 text-sm"
               >
                 Continue
                 <ArrowRight className="w-4 h-4" />
@@ -110,16 +100,16 @@ export function ItemSelectionPage() {
         </div>
 
         {/* Search */}
-        <div className="bg-white border-b border-gray-200 px-6 py-3">
+        <div className="bg-white border-b border-neutral-300 px-6 py-3">
           <div className="max-w-5xl mx-auto">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-neutral-400" />
               <input
                 type="text"
                 placeholder="Search items..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="input-field w-full pl-10 pr-4 py-2"
               />
             </div>
           </div>
@@ -129,17 +119,17 @@ export function ItemSelectionPage() {
         <div className="flex-1 overflow-auto px-6 py-6">
           <div className="max-w-5xl mx-auto">
             {loading && (
-              <div className="text-center py-12 text-gray-500">
+              <div className="text-center py-12 text-neutral-500">
                 Loading items...
               </div>
             )}
 
             {error && (
-              <div className="text-center py-12">
-                <p className="text-red-500 mb-4">{error}</p>
+              <div className="alert-box text-center py-8">
+                <p className="text-blue-900 mb-4">{error}</p>
                 <button
                   onClick={loadItems}
-                  className="text-blue-600 hover:underline"
+                  className="text-blue-900 font-bold hover:underline"
                 >
                   Try again
                 </button>
@@ -147,7 +137,7 @@ export function ItemSelectionPage() {
             )}
 
             {!loading && !error && filteredItems.length === 0 && (
-              <div className="text-center py-12 text-gray-500">
+              <div className="card text-center py-12 text-neutral-500 border-l-4 border-blue-900">
                 {searchQuery ? 'No items match your search' : 'No items found. Sync your Zotero library first.'}
               </div>
             )}
@@ -157,24 +147,24 @@ export function ItemSelectionPage() {
                 {filteredItems.map((item) => {
                   const isSelected = selectedItemKeys.includes(item.key);
                   const Icon = item.type === 'html' ? Globe : FileText;
-                  const iconColor = item.type === 'html' ? 'text-green-500' : 'text-blue-500';
+                  const iconColor = item.type === 'html' ? 'text-green-600' : 'text-blue-900';
 
                   return (
                     <div
                       key={item.key}
                       onClick={() => toggleItem(item.key)}
-                      className={`relative p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                      className={`relative p-4 rounded-none cursor-pointer transition-all border-l-4 ${
                         isSelected
-                          ? 'border-blue-500 bg-blue-50'
-                          : 'border-gray-200 bg-white hover:border-gray-300'
+                          ? 'border-l-blue-900 bg-blue-50 ring-2 ring-blue-900'
+                          : 'border-l-neutral-300 bg-white hover:border-l-blue-900 hover:translate-x-1'
                       }`}
                     >
                       {/* Selection Indicator */}
                       <div
-                        className={`absolute top-3 right-3 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
+                        className={`absolute top-3 right-3 w-5 h-5 rounded-none border-2 flex items-center justify-center transition-colors ${
                           isSelected
-                            ? 'border-blue-500 bg-blue-500'
-                            : 'border-gray-300'
+                            ? 'border-blue-900 bg-blue-900'
+                            : 'border-neutral-300'
                         }`}
                       >
                         {isSelected && <Check className="w-3 h-3 text-white" />}
@@ -184,19 +174,13 @@ export function ItemSelectionPage() {
                       <div className="flex items-start gap-3 pr-6">
                         <Icon className={`w-5 h-5 mt-0.5 flex-shrink-0 ${iconColor}`} />
                         <div className="flex-1 min-w-0">
-                          <h3 className="font-medium text-gray-900 text-sm line-clamp-2">
+                          <h3 className="font-medium text-neutral-800 text-sm line-clamp-2">
                             {item.name}
                           </h3>
-                          <p className="text-xs text-gray-500 mt-1 truncate">
+                          <p className="text-xs text-neutral-500 mt-1 truncate">
                             {item.filename}
                           </p>
-                          <span
-                            className={`inline-block mt-2 text-xs px-2 py-0.5 rounded ${
-                              item.type === 'html'
-                                ? 'bg-green-100 text-green-700'
-                                : 'bg-blue-100 text-blue-700'
-                            }`}
-                          >
+                          <span className="badge mt-2 inline-block">
                             {item.type.toUpperCase()}
                           </span>
                         </div>
