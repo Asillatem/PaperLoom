@@ -6,3 +6,8 @@ __pycache__/
 devcontainer/
 nul
 node_modules/
+
+# Internal configuration and specs
+.claude/
+.github/Spec_LS.md
+.github/Spec_LS_v2.MD
