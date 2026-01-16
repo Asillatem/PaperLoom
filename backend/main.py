@@ -17,6 +17,7 @@ from database import create_db_and_tables, get_session, engine
 from services.zotero import get_zotero_service
 from models import CachedZoteroItem
 import models  # noqa: F401 - imported for SQLModel metadata
+from routers import settings, chat
 
 
 # Configuration from environment variables with sensible defaults
@@ -32,6 +33,10 @@ app.add_middleware(
 	allow_methods=["*"],
 	allow_headers=["*"],
 )
+
+# Include routers
+app.include_router(settings.router)
+app.include_router(chat.router)
 
 
 def ensure_dirs() -> None:

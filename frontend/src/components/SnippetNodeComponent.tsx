@@ -14,6 +14,9 @@ export function SnippetNodeComponent({ data, selected, id }: NodeProps<SnippetNo
 
   const jumpToSource = useAppStore((state) => state.jumpToSource);
   const removeNode = useAppStore((state) => state.removeNode);
+  const highlightedAiNodes = useAppStore((state) => state.highlightedAiNodes);
+
+  const isAiHighlighted = highlightedAiNodes.includes(id);
 
   const comments = data.comments || [];
   const hasComments = comments.length > 0;
@@ -52,29 +55,37 @@ export function SnippetNodeComponent({ data, selected, id }: NodeProps<SnippetNo
 
   return (
     <>
-      {/* Connection handles - Swiss blue */}
+      {/* Connection handles - all handles can be both source and target */}
       <Handle
-        type="target"
+        type="source"
         position={Position.Top}
         id="top"
+        isConnectableStart={true}
+        isConnectableEnd={true}
         className="!w-3 !h-3 !bg-blue-900 !border-2 !border-white !rounded-none snippet-handle"
       />
       <Handle
         type="source"
         position={Position.Bottom}
         id="bottom"
+        isConnectableStart={true}
+        isConnectableEnd={true}
         className="!w-3 !h-3 !bg-blue-900 !border-2 !border-white !rounded-none snippet-handle"
       />
       <Handle
-        type="target"
+        type="source"
         position={Position.Left}
         id="left"
+        isConnectableStart={true}
+        isConnectableEnd={true}
         className="!w-3 !h-3 !bg-blue-900 !border-2 !border-white !rounded-none snippet-handle"
       />
       <Handle
         type="source"
         position={Position.Right}
         id="right"
+        isConnectableStart={true}
+        isConnectableEnd={true}
         className="!w-3 !h-3 !bg-blue-900 !border-2 !border-white !rounded-none snippet-handle"
       />
 
@@ -84,6 +95,7 @@ export function SnippetNodeComponent({ data, selected, id }: NodeProps<SnippetNo
         className={`
           bg-white shadow-sm p-4 rounded-none border-l-4 transition-all
           ${selected ? 'border-l-blue-900 shadow-lg ring-2 ring-blue-900' : 'border-l-blue-900'}
+          ${isAiHighlighted ? 'ring-2 ring-yellow-400 ring-offset-2 shadow-lg shadow-yellow-200' : ''}
           min-w-[220px] max-w-[400px]
         `}
       >

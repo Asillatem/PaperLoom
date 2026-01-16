@@ -114,6 +114,9 @@ export interface ProjectMetadata {
   activePdf: string | null;
 }
 
+// Arrow direction for edges
+export type ArrowDirection = 'forward' | 'backward' | 'both' | 'none';
+
 // Edge connecting two nodes on the canvas
 export interface SnippetEdge {
   id: string;
@@ -124,6 +127,7 @@ export interface SnippetEdge {
   type?: 'smoothstep' | 'default' | 'straight';
   label?: string; // Optional relationship label
   animated?: boolean;
+  arrowDirection?: ArrowDirection; // Arrow direction (defaults to 'forward')
 }
 
 // Project data structure for save/load
@@ -147,4 +151,35 @@ export interface ProjectSummary {
   modified: number;
   nodeCount: number;
   itemCount: number;        // Number of selected items
+}
+
+// AI Settings for LLM configuration
+export interface AISettings {
+  provider: 'ollama' | 'openai';
+  model_name: string;
+  base_url: string;
+  temperature: number;
+  context_window: number;
+  system_prompt: string;
+  graph_depth: number;
+  openai_key_configured?: boolean; // True if OPENAI_API_KEY is set in backend .env
+}
+
+// Chat message from AI Brain
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  citations?: { nodeId: string; preview: string }[];
+  contextNodes?: string[];
+  timestamp: number;
+}
+
+// Chat session for AI Brain
+export interface ChatSession {
+  id: number;
+  projectId: string;
+  title: string;
+  messages: ChatMessage[];
+  createdAt: number;
 }

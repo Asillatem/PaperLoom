@@ -1,10 +1,11 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileText, Globe, Save, FilePlus, RefreshCw, Plus } from 'lucide-react';
+import { FileText, Globe, Save, FilePlus, RefreshCw, Plus, Settings } from 'lucide-react';
 import { fetchFiles, syncLibrary } from '../api';
 import type { FileEntry } from '../api';
 import { useAppStore } from '../store/useAppStore';
 import { QuickAddModal } from './QuickAddModal';
+import { SettingsModal } from './SettingsModal';
 
 export function PDFLibrarySidebar() {
   const [files, setFiles] = useState<FileEntry[]>([]);
@@ -12,6 +13,7 @@ export function PDFLibrarySidebar() {
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
   const navigate = useNavigate();
 
   const selectedPdf = useAppStore((state) => state.selectedPdf);
@@ -227,25 +229,40 @@ export function PDFLibrarySidebar() {
       </div>
 
       {/* Footer */}
-      <div className="p-3 border-t border-neutral-300 text-xs text-neutral-600 bg-neutral-50">
-        {(() => {
-          const pdfCount = filteredFiles.filter(f => f.type === 'pdf').length;
-          const htmlCount = filteredFiles.filter(f => f.type === 'html').length;
-          const totalText = selectedItemKeys.length > 0
-            ? `${filteredFiles.length} of ${files.length}`
-            : `${files.length}`;
-          return (
-            <span className="font-medium">
-              {totalText} documents <span className="text-neutral-400">({pdfCount} PDF, {htmlCount} HTML)</span>
-            </span>
-          );
-        })()}
+      <div className="p-3 border-t border-neutral-300 text-xs text-neutral-600 bg-neutral-50 flex items-center justify-between">
+        <span className="font-medium">
+          {(() => {
+            const pdfCount = filteredFiles.filter(f => f.type === 'pdf').length;
+            const htmlCount = filteredFiles.filter(f => f.type === 'html').length;
+            const totalText = selectedItemKeys.length > 0
+              ? `${filteredFiles.length} of ${files.length}`
+              : `${files.length}`;
+            return (
+              <>
+                {totalText} docs <span className="text-neutral-400">({pdfCount} PDF, {htmlCount} HTML)</span>
+              </>
+            );
+          })()}
+        </span>
+        <button
+          onClick={() => setShowSettingsModal(true)}
+          className="p-1.5 hover:bg-neutral-200 rounded-none transition-colors"
+          title="AI Brain Settings"
+        >
+          <Settings className="w-4 h-4 text-neutral-600" />
+        </button>
       </div>
 
       {/* Quick Add Modal */}
       <QuickAddModal
         isOpen={showAddModal}
         onClose={() => setShowAddModal(false)}
+      />
+
+      {/* Settings Modal */}
+      <SettingsModal
+        isOpen={showSettingsModal}
+        onClose={() => setShowSettingsModal(false)}
       />
     </aside>
   );

@@ -63,29 +63,37 @@ export function NoteNodeComponent({ data, selected, id }: NodeProps<NoteNodeData
 
   return (
     <>
-      {/* Connection handles */}
+      {/* Connection handles - all handles can be both source and target */}
       <Handle
-        type="target"
+        type="source"
         position={Position.Top}
         id="top"
+        isConnectableStart={true}
+        isConnectableEnd={true}
         className="!w-3 !h-3 !bg-blue-900 !border-2 !border-white !rounded-none snippet-handle"
       />
       <Handle
         type="source"
         position={Position.Bottom}
         id="bottom"
+        isConnectableStart={true}
+        isConnectableEnd={true}
         className="!w-3 !h-3 !bg-blue-900 !border-2 !border-white !rounded-none snippet-handle"
       />
       <Handle
-        type="target"
+        type="source"
         position={Position.Left}
         id="left"
+        isConnectableStart={true}
+        isConnectableEnd={true}
         className="!w-3 !h-3 !bg-blue-900 !border-2 !border-white !rounded-none snippet-handle"
       />
       <Handle
         type="source"
         position={Position.Right}
         id="right"
+        isConnectableStart={true}
+        isConnectableEnd={true}
         className="!w-3 !h-3 !bg-blue-900 !border-2 !border-white !rounded-none snippet-handle"
       />
 

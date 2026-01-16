@@ -9,12 +9,37 @@ import ReactFlow, {
   useReactFlow,
   ReactFlowProvider,
 } from 'reactflow';
-import type { NodeTypes, OnNodesChange, OnEdgesChange, OnConnect } from 'reactflow';
+import type { NodeTypes, OnNodesChange, OnEdgesChange, OnConnect, Edge } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { SnippetNodeComponent } from './SnippetNodeComponent';
 import { NoteNodeComponent } from './NoteNodeComponent';
+import { EdgeConfigPopover } from './EdgeConfigPopover';
 import { useAppStore } from '../store/useAppStore';
-import { StickyNote } from 'lucide-react';
+import { StickyNote, Map } from 'lucide-react';
+import type { ArrowDirection } from '../types';
+
+// Helper to compute edge markers based on arrow direction
+const getEdgeMarkers = (direction: ArrowDirection = 'forward') => {
+  const arrowMarker = {
+    type: MarkerType.ArrowClosed,
+    color: '#1e3a8a',
+    width: 20,
+    height: 20,
+  };
+
+  switch (direction) {
+    case 'forward':
+      return { markerEnd: arrowMarker };
+    case 'backward':
+      return { markerStart: arrowMarker };
+    case 'both':
+      return { markerStart: arrowMarker, markerEnd: arrowMarker };
+    case 'none':
+      return {};
+    default:
+      return { markerEnd: arrowMarker };
+  }
+};
 
 const nodeTypes: NodeTypes = {
   snippetNode: SnippetNodeComponent,
@@ -38,6 +63,12 @@ function CanvasInner() {
   // Context menu state
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; flowX: number; flowY: number } | null>(null);
 
+  // Edge config popover state
+  const [selectedEdge, setSelectedEdge] = useState<{ id: string; position: { x: number; y: number } } | null>(null);
+
+  // Minimap visibility state
+  const [showMinimap, setShowMinimap] = useState(false);
+
   // Add zIndex to nodes - selected node gets highest z-index
   const nodesWithZIndex = useMemo(() => {
     return nodes.map((node) => ({
@@ -45,6 +76,14 @@ function CanvasInner() {
       zIndex: node.id === selectedNodeId ? 1000 : 0,
     }));
   }, [nodes, selectedNodeId]);
+
+  // Transform edges to include computed markers based on arrowDirection
+  const edgesWithMarkers = useMemo(() => {
+    return edges.map((edge) => ({
+      ...edge,
+      ...getEdgeMarkers(edge.arrowDirection),
+    }));
+  }, [edges]);
 
   const onNodesChange: OnNodesChange = useCallback(
     (changes) => {
@@ -74,6 +113,23 @@ function CanvasInner() {
     },
     [storeOnConnect]
   );
+
+  // Handle edge click to show config popover
+  const onEdgeClick = useCallback(
+    (event: React.MouseEvent, edge: Edge) => {
+      event.stopPropagation();
+      setSelectedEdge({
+        id: edge.id,
+        position: { x: event.clientX, y: event.clientY },
+      });
+    },
+    []
+  );
+
+  // Close edge config popover
+  const closeEdgeConfig = useCallback(() => {
+    setSelectedEdge(null);
+  }, []);
 
   // Handle right-click on canvas
   const onPaneContextMenu = useCallback(
@@ -124,12 +180,13 @@ function CanvasInner() {
     <div ref={reactFlowWrapper} className="h-full w-full bg-neutral-100 relative" onClick={closeContextMenu}>
       <ReactFlow
         nodes={nodesWithZIndex}
-        edges={edges}
+        edges={edgesWithMarkers}
         nodeTypes={nodeTypes}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         onPaneContextMenu={onPaneContextMenu}
+        onEdgeClick={onEdgeClick}
         connectionMode={ConnectionMode.Loose}
         fitView
         minZoom={0.1}
@@ -139,21 +196,27 @@ function CanvasInner() {
         defaultEdgeOptions={{
           type: 'smoothstep',
           style: { stroke: '#1e3a8a', strokeWidth: 2 },
-          markerEnd: {
-            type: MarkerType.ArrowClosed,
-            color: '#1e3a8a',
-            width: 20,
-            height: 20,
-          },
         }}
       >
         <Background variant={BackgroundVariant.Dots} gap={16} size={1} color="#d4d4d4" />
-        <Controls className="bg-white border border-neutral-300 rounded-none" />
-        <MiniMap
-          nodeColor={(node) => node.type === 'noteNode' ? '#fbbf24' : '#1e3a8a'}
-          maskColor="rgba(0, 0, 0, 0.1)"
-          className="bg-white border border-neutral-300 rounded-none"
-        />
+        <Controls className="bg-white border border-neutral-300 rounded-none">
+          {/* Map toggle button integrated into Controls */}
+          <button
+            onClick={() => setShowMinimap(!showMinimap)}
+            className={`react-flow__controls-button ${showMinimap ? 'bg-blue-100' : ''}`}
+            title={showMinimap ? 'Hide minimap' : 'Show minimap'}
+          >
+            <Map className="w-3 h-3" />
+          </button>
+        </Controls>
+        {showMinimap && (
+          <MiniMap
+            nodeColor={(node) => node.type === 'noteNode' ? '#fbbf24' : '#1e3a8a'}
+            maskColor="rgba(0, 0, 0, 0.1)"
+            className="bg-white border border-neutral-300 rounded-none !left-2 !bottom-36"
+            position="bottom-left"
+          />
+        )}
       </ReactFlow>
 
       {/* Add Note Button */}
@@ -210,6 +273,16 @@ function CanvasInner() {
             Purple
           </button>
         </div>
+      )}
+
+      {/* Edge Config Popover */}
+      {selectedEdge && (
+        <EdgeConfigPopover
+          edgeId={selectedEdge.id}
+          position={selectedEdge.position}
+          currentDirection={edges.find((e) => e.id === selectedEdge.id)?.arrowDirection || 'forward'}
+          onClose={closeEdgeConfig}
+        />
       )}
 
       {/* Empty state */}

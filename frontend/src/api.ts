@@ -1,7 +1,7 @@
-import type { ProjectData, FileEntry, ProjectSummary } from './types';
+import type { ProjectData, FileEntry, ProjectSummary, AISettings } from './types';
 
 // Re-export types for backward compatibility
-export type { FileEntry, ProjectSummary };
+export type { FileEntry, ProjectSummary, AISettings };
 
 const API_BASE = 'http://localhost:8000';
 
@@ -99,5 +99,175 @@ export async function deleteProject(filename: string): Promise<void> {
   });
   if (!resp.ok) {
     throw new Error(`Failed to delete project: ${resp.status} ${resp.statusText}`);
+  }
+}
+
+// ============================================
+// AI Settings API
+// ============================================
+
+/**
+ * Get current AI settings (API key will be masked as ***)
+ */
+export async function getAISettings(): Promise<AISettings> {
+  const resp = await fetch(`${API_BASE}/settings/ai`);
+  if (!resp.ok) {
+    throw new Error(`Failed to fetch AI settings: ${resp.status} ${resp.statusText}`);
+  }
+  return resp.json();
+}
+
+/**
+ * Update AI settings
+ * @param settings - Partial or full AI settings to update
+ */
+export async function updateAISettings(settings: Partial<AISettings>): Promise<void> {
+  const resp = await fetch(`${API_BASE}/settings/ai`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(settings),
+  });
+  if (!resp.ok) {
+    throw new Error(`Failed to update AI settings: ${resp.status} ${resp.statusText}`);
+  }
+}
+
+/**
+ * Test the LLM connection with current settings
+ */
+export async function testAIConnection(): Promise<{ status: string; response?: string; message?: string }> {
+  const resp = await fetch(`${API_BASE}/settings/ai/test`, { method: 'POST' });
+  if (!resp.ok) {
+    throw new Error(`Connection test failed: ${resp.status} ${resp.statusText}`);
+  }
+  return resp.json();
+}
+
+/**
+ * Get available models from the current provider
+ */
+export async function getAvailableModels(): Promise<{ status: string; models: string[]; message?: string }> {
+  const resp = await fetch(`${API_BASE}/settings/ai/models`);
+  if (!resp.ok) {
+    throw new Error(`Failed to fetch models: ${resp.status} ${resp.statusText}`);
+  }
+  return resp.json();
+}
+
+// ============================================
+// Chat API
+// ============================================
+
+export type ContextMode = 'auto' | 'manual' | 'hybrid';
+
+export interface ChatRequest {
+  project_id: string;
+  query: string;
+  session_id?: number;
+  context_node_ids?: string[];
+  nodes?: any[];
+  edges?: any[];
+  context_mode?: ContextMode;
+  pinned_node_ids?: string[];
+}
+
+export interface ChatCitation {
+  nodeId: string;
+  preview: string;
+}
+
+export interface NodeInsight {
+  nodeId: string;
+  source: 'rag' | 'pinned' | 'graph';
+  similarity: number | null;
+  preview: string;
+}
+
+export interface ChatInsights {
+  total_context_nodes: number;
+  rag_nodes: number;
+  pinned_nodes: number;
+  graph_expanded_nodes: number;
+  context_mode: string;
+  graph_depth: number;
+  approx_context_tokens: number;
+  node_details: NodeInsight[];
+}
+
+export interface ChatResponse {
+  response: string;
+  citations: ChatCitation[];
+  context_nodes: string[];
+  session_id: number;
+  insights: ChatInsights;
+}
+
+/**
+ * Send a message to the AI Brain
+ */
+export async function sendChatMessage(request: ChatRequest): Promise<ChatResponse> {
+  const resp = await fetch(`${API_BASE}/chat/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  });
+  if (!resp.ok) {
+    const error = await resp.json().catch(() => ({}));
+    throw new Error(error.detail || `Chat failed: ${resp.status}`);
+  }
+  return resp.json();
+}
+
+export interface ChatSessionSummary {
+  id: number;
+  title: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Get all chat sessions for a project
+ */
+export async function getChatSessions(projectId: string): Promise<ChatSessionSummary[]> {
+  const resp = await fetch(`${API_BASE}/chat/sessions/${encodeURIComponent(projectId)}`);
+  if (!resp.ok) {
+    throw new Error(`Failed to fetch sessions: ${resp.status}`);
+  }
+  return resp.json();
+}
+
+export interface ChatMessageData {
+  id: number;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  citations: ChatCitation[];
+  context_nodes: string[];
+  created_at: string;
+}
+
+export interface ChatSessionData {
+  id: number;
+  title: string;
+  messages: ChatMessageData[];
+}
+
+/**
+ * Get a chat session with all messages
+ */
+export async function getChatSession(projectId: string, sessionId: number): Promise<ChatSessionData> {
+  const resp = await fetch(`${API_BASE}/chat/sessions/${encodeURIComponent(projectId)}/${sessionId}`);
+  if (!resp.ok) {
+    throw new Error(`Failed to fetch session: ${resp.status}`);
+  }
+  return resp.json();
+}
+
+/**
+ * Delete a chat session
+ */
+export async function deleteChatSession(sessionId: number): Promise<void> {
+  const resp = await fetch(`${API_BASE}/chat/sessions/${sessionId}`, { method: 'DELETE' });
+  if (!resp.ok) {
+    throw new Error(`Failed to delete session: ${resp.status}`);
   }
 }

@@ -11,6 +11,7 @@ import type {
   PersistentHighlight,
   CanvasNode,
   NoteNode,
+  ArrowDirection,
 } from '../types';
 import type { Connection, EdgeChange } from 'reactflow';
 import { applyEdgeChanges } from 'reactflow';
@@ -19,6 +20,12 @@ interface AppStore {
   // PDF State
   selectedPdf: FileEntry | null;
   pdfViewerState: PDFViewerState;
+
+  // Chat State
+  chatSidebarOpen: boolean;
+  highlightedAiNodes: string[];
+  isAiLoading: boolean;
+  activeChatSessionId: number | null;
 
   // Canvas State
   nodes: CanvasNode[];
@@ -54,6 +61,7 @@ interface AppStore {
   // Canvas Edge Actions
   addEdge: (edge: SnippetEdge) => void;
   removeEdge: (edgeId: string) => void;
+  updateEdgeConfig: (edgeId: string, config: { arrowDirection?: ArrowDirection; label?: string }) => void;
   onEdgesChange: (changes: EdgeChange[]) => void;
   onConnect: (connection: Connection) => void;
 
@@ -84,6 +92,13 @@ interface AppStore {
   setSelectedItemKeys: (keys: string[]) => void;
   addSelectedItemKey: (key: string) => void;
   removeSelectedItemKey: (key: string) => void;
+
+  // Chat Actions
+  toggleChatSidebar: () => void;
+  setChatSidebarOpen: (open: boolean) => void;
+  setHighlightedAiNodes: (nodeIds: string[]) => void;
+  setIsAiLoading: (loading: boolean) => void;
+  setActiveChatSessionId: (sessionId: number | null) => void;
 }
 
 export const useAppStore = create<AppStore>()(
@@ -97,6 +112,12 @@ export const useAppStore = create<AppStore>()(
         scale: 1.0,
         highlightedRect: null,
       },
+
+      // Initial Chat State
+      chatSidebarOpen: false,
+      highlightedAiNodes: [],
+      isAiLoading: false,
+      activeChatSessionId: null,
 
       // Initial Canvas State
       nodes: [],
@@ -300,6 +321,24 @@ export const useAppStore = create<AppStore>()(
           },
         })),
 
+      updateEdgeConfig: (edgeId, config) =>
+        set((state) => ({
+          edges: state.edges.map((e) =>
+            e.id === edgeId
+              ? {
+                  ...e,
+                  ...(config.arrowDirection !== undefined && { arrowDirection: config.arrowDirection }),
+                  ...(config.label !== undefined && { label: config.label }),
+                }
+              : e
+          ),
+          isDirty: true,
+          projectMetadata: {
+            ...state.projectMetadata,
+            modified: Date.now(),
+          },
+        })),
+
       onEdgesChange: (changes) =>
         set((state) => ({
           edges: applyEdgeChanges(changes, state.edges) as SnippetEdge[],
@@ -325,6 +364,7 @@ export const useAppStore = create<AppStore>()(
           sourceHandle: connection.sourceHandle || undefined,
           targetHandle: connection.targetHandle || undefined,
           type: 'smoothstep',
+          arrowDirection: 'forward',
         };
 
         set((state) => ({
@@ -597,6 +637,24 @@ export const useAppStore = create<AppStore>()(
           selectedItemKeys: state.selectedItemKeys.filter((k) => k !== key),
           isDirty: true,
         })),
+
+      // Chat Actions
+      toggleChatSidebar: () =>
+        set((state) => ({
+          chatSidebarOpen: !state.chatSidebarOpen,
+        })),
+
+      setChatSidebarOpen: (open) =>
+        set({ chatSidebarOpen: open }),
+
+      setHighlightedAiNodes: (nodeIds) =>
+        set({ highlightedAiNodes: nodeIds }),
+
+      setIsAiLoading: (loading) =>
+        set({ isAiLoading: loading }),
+
+      setActiveChatSessionId: (sessionId) =>
+        set({ activeChatSessionId: sessionId }),
     }),
     {
       name: 'liquid-science-storage',

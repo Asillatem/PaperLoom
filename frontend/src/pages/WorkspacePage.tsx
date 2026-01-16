@@ -6,6 +6,7 @@ import { PDFViewer } from '../components/PDFViewer';
 import { HTMLViewer } from '../components/HTMLViewer';
 import { PDFControls } from '../components/PDFControls';
 import { Canvas } from '../components/Canvas';
+import { ChatSidebar } from '../components/ChatSidebar';
 import { useAppStore } from '../store/useAppStore';
 import { loadProjectFromServer } from '../api';
 
@@ -121,6 +122,9 @@ export function WorkspacePage() {
           </div>
         </Panel>
       </Group>
+
+      {/* AI Brain Chat Sidebar */}
+      <ChatSidebar />
     </div>
   );
 }

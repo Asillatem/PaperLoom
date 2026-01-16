@@ -11,3 +11,7 @@ node_modules/
 .claude/
 .github/Spec_LS.md
 .github/Spec_LS_v2.MD
+
+# AI Brain secrets and cache
+backend/secrets.json
+backend/chroma_db/

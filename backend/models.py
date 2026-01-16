@@ -115,3 +115,36 @@ class Highlight(SQLModel, table=True):
     rect_height: float
 
     color: Optional[str] = None
+
+
+# ============================================
+# AI Brain / Chat Models
+# ============================================
+
+class ChatSession(SQLModel, table=True):
+    """A chat conversation within a project."""
+    __tablename__ = "chat_session"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    project_id: int = Field(foreign_key="project.id", index=True)
+    title: str = Field(default="New Chat")
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+    messages: List["ChatMessage"] = Relationship(back_populates="session")
+
+
+class ChatMessage(SQLModel, table=True):
+    """A single message in a chat session."""
+    __tablename__ = "chat_message"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    session_id: int = Field(foreign_key="chat_session.id", index=True)
+    role: str  # "user" | "assistant" | "system"
+    content: str
+    # JSON arrays stored as strings
+    citations_json: Optional[str] = None  # [{"nodeId": "...", "preview": "..."}]
+    context_nodes_json: Optional[str] = None  # ["node_id_1", "node_id_2", ...]
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    session: Optional[ChatSession] = Relationship(back_populates="messages")
