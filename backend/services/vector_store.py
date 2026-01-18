@@ -1,11 +1,16 @@
 """Vector store service using ChromaDB for semantic search."""
 
-import os
+import hashlib
 from pathlib import Path
 from typing import Optional
 
 import chromadb
 from chromadb.config import Settings
+
+
+def _content_hash(content: str) -> str:
+    """Generate a hash of content to detect changes."""
+    return hashlib.md5(content.encode()).hexdigest()[:16]
 
 # Store ChromaDB data in backend/chroma_db/
 CHROMA_PATH = Path(__file__).parent.parent / "chroma_db"
@@ -70,6 +75,7 @@ def upsert_node(
             "project_id": project_id,
             "source_document": source_document,
             "page_index": page_index,
+            "content_hash": _content_hash(content),
         }],
     )
 
@@ -137,42 +143,64 @@ def query(
     return formatted
 
 
-def sync_project_nodes(project_id: str, nodes: list[dict]) -> None:
+def sync_project_nodes(project_id: str, nodes: list[dict]) -> int:
     """
     Sync all nodes for a project to the vector store.
+    Only re-embeds nodes whose content has changed.
 
     Args:
         project_id: Project identifier
         nodes: List of node dicts with 'id', 'content', 'source_document', 'page_index'
+
+    Returns:
+        Number of nodes that were actually updated (for debugging)
     """
     collection = get_collection()
 
-    # Get existing node IDs for this project
+    # Get existing nodes with their metadata (including content_hash)
     existing = collection.get(
         where={"project_id": project_id},
-        include=[],
+        include=["metadatas"],
     )
     existing_ids = set(existing["ids"]) if existing["ids"] else set()
 
-    # Upsert all current nodes
+    # Build hash lookup: node_id -> content_hash
+    existing_hashes = {}
+    if existing["ids"] and existing["metadatas"]:
+        for i, node_id in enumerate(existing["ids"]):
+            metadata = existing["metadatas"][i] if i < len(existing["metadatas"]) else {}
+            existing_hashes[node_id] = metadata.get("content_hash", "")
+
+    # Only upsert nodes that are new or changed
     current_ids = set()
+    updated_count = 0
     for node in nodes:
         node_id = node.get("id", "")
         content = node.get("content", "")
         if node_id and content and content.strip():
-            upsert_node(
-                node_id=node_id,
-                content=content,
-                project_id=project_id,
-                source_document=node.get("source_document", ""),
-                page_index=node.get("page_index", 0),
-            )
             current_ids.add(node_id)
+
+            # Check if content has changed
+            new_hash = _content_hash(content)
+            old_hash = existing_hashes.get(node_id, "")
+
+            if new_hash != old_hash:
+                # Content is new or changed - need to re-embed
+                upsert_node(
+                    node_id=node_id,
+                    content=content,
+                    project_id=project_id,
+                    source_document=node.get("source_document", ""),
+                    page_index=node.get("page_index", 0),
+                )
+                updated_count += 1
 
     # Delete nodes that no longer exist
     removed_ids = existing_ids - current_ids
     if removed_ids:
         collection.delete(ids=list(removed_ids))
+
+    return updated_count
 
 
 def get_node_count(project_id: Optional[str] = None) -> int:

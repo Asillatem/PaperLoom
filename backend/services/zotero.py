@@ -69,13 +69,18 @@ class ZoteroService:
             # Get attachments for this item
             attachments = self._get_item_attachments(item_key)
 
-            # Build item info
+            # Build item info with full metadata
             item_info = {
                 "key": item_key,
                 "title": item_data.get("title", "Untitled"),
                 "itemType": item_type,
                 "creators": item_data.get("creators", []),
                 "dateAdded": item_data.get("dateAdded"),
+                "date": item_data.get("date", ""),  # Publication date
+                "DOI": item_data.get("DOI", ""),
+                "abstractNote": item_data.get("abstractNote", ""),
+                "publicationTitle": item_data.get("publicationTitle", ""),  # Journal name
+                "url": item_data.get("url", ""),
                 "attachments": attachments,
             }
 

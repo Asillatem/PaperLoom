@@ -50,6 +50,35 @@ export const getPdfUrl = getFileUrl;
 export const getHtmlUrl = getFileUrl;
 
 /**
+ * Item metadata from Zotero
+ */
+export interface ItemMetadata {
+  key: string;
+  parentKey: string;
+  title: string;
+  authors: string[];
+  publicationDate: string;
+  doi: string;
+  abstract: string;
+  publicationTitle: string;
+  url: string;
+  itemType: string;
+  filename: string;
+  fileType: string;
+}
+
+/**
+ * Get metadata for a Zotero item by attachment key
+ */
+export async function getItemMetadata(attachmentKey: string): Promise<ItemMetadata> {
+  const resp = await fetch(`${API_BASE}/metadata/${encodeURIComponent(attachmentKey)}`);
+  if (!resp.ok) {
+    throw new Error(`Failed to fetch metadata: ${resp.status} ${resp.statusText}`);
+  }
+  return resp.json();
+}
+
+/**
  * Save the current project to the backend
  * @param project - Project data to save
  * @param filename - Optional filename for the project
@@ -216,6 +245,95 @@ export async function sendChatMessage(request: ChatRequest): Promise<ChatRespons
     throw new Error(error.detail || `Chat failed: ${resp.status}`);
   }
   return resp.json();
+}
+
+/**
+ * Stream event types from the chat stream endpoint
+ */
+export interface StreamTokenEvent {
+  type: 'token';
+  content: string;
+}
+
+export interface StreamDoneEvent {
+  type: 'done';
+  session_id: number;
+  insights: ChatInsights;
+  citations: ChatCitation[];
+}
+
+export interface StreamErrorEvent {
+  type: 'error';
+  message: string;
+}
+
+export type StreamEvent = StreamTokenEvent | StreamDoneEvent | StreamErrorEvent;
+
+/**
+ * Send a message to the AI Brain with streaming response
+ * @param request - Chat request
+ * @param onToken - Callback for each token received
+ * @param onDone - Callback when streaming is complete
+ * @param onError - Callback on error
+ */
+export async function sendChatMessageStream(
+  request: ChatRequest,
+  onToken: (token: string) => void,
+  onDone: (data: { session_id: number; insights: ChatInsights; citations: ChatCitation[] }) => void,
+  onError: (error: string) => void
+): Promise<void> {
+  const resp = await fetch(`${API_BASE}/chat/stream`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  });
+
+  if (!resp.ok) {
+    const error = await resp.json().catch(() => ({}));
+    throw new Error(error.detail || `Chat stream failed: ${resp.status}`);
+  }
+
+  const reader = resp.body?.getReader();
+  if (!reader) {
+    throw new Error('No response body');
+  }
+
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      if (line.startsWith('data: ')) {
+        const jsonStr = line.slice(6).trim();
+        if (!jsonStr) continue;
+
+        try {
+          const event = JSON.parse(jsonStr) as StreamEvent;
+
+          if (event.type === 'token') {
+            onToken(event.content);
+          } else if (event.type === 'done') {
+            onDone({
+              session_id: event.session_id,
+              insights: event.insights,
+              citations: event.citations,
+            });
+          } else if (event.type === 'error') {
+            onError(event.message);
+          }
+        } catch (e) {
+          console.warn('Failed to parse SSE event:', jsonStr);
+        }
+      }
+    }
+  }
 }
 
 export interface ChatSessionSummary {

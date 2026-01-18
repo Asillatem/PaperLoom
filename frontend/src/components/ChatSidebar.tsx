@@ -18,10 +18,11 @@ import {
 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import {
-  sendChatMessage,
+  sendChatMessageStream,
   getChatSessions,
   getChatSession,
   deleteChatSession,
+  getAISettings,
   type ChatCitation,
   type ChatInsights,
   type ContextMode,
@@ -42,6 +43,15 @@ const CONTEXT_MODES: { value: ContextMode; label: string; icon: React.ReactNode;
   { value: 'manual', label: 'Manual', icon: <Pin className="w-3 h-3" />, description: 'Only use pinned snippets' },
   { value: 'hybrid', label: 'Hybrid', icon: <Sparkles className="w-3 h-3" />, description: 'RAG + pinned snippets' },
 ];
+
+/** Format token count for display (e.g., 3200 -> "3.2k", 128000 -> "128k") */
+function formatTokens(count: number): string {
+  if (count >= 1000) {
+    const k = count / 1000;
+    return k >= 10 ? `${Math.round(k)}k` : `${k.toFixed(1)}k`;
+  }
+  return count.toString();
+}
 
 export function ChatSidebar() {
   const {
@@ -68,6 +78,8 @@ export function ChatSidebar() {
   const [showHistory, setShowHistory] = useState(false);
   const [sessions, setSessions] = useState<ChatSessionSummary[]>([]);
   const [loadingSessions, setLoadingSessions] = useState(false);
+  const [sessionTokens, setSessionTokens] = useState(0);
+  const [maxContextWindow, setMaxContextWindow] = useState(128000); // Default 128k
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -94,6 +106,19 @@ export function ChatSidebar() {
       loadSessions();
     }
   }, [showHistory, currentProjectId]);
+
+  // Load AI settings to get max context window
+  useEffect(() => {
+    getAISettings()
+      .then((settings) => {
+        if (settings.context_window) {
+          setMaxContextWindow(settings.context_window);
+        }
+      })
+      .catch(() => {
+        // Keep default if settings fail to load
+      });
+  }, []);
 
   const loadSessions = async () => {
     if (!currentProjectId) return;
@@ -148,6 +173,7 @@ export function ChatSidebar() {
     setMessages([]);
     setShowHistory(false);
     setPinnedNodeIds([]);
+    setSessionTokens(0);
   };
 
   const togglePinnedNode = (nodeId: string) => {
@@ -165,45 +191,90 @@ export function ChatSidebar() {
       content: input.trim(),
     };
 
+    const streamingMsgId = `msg-${Date.now() + 1}`;
+
     setMessages((prev) => [...prev, userMessage]);
     setInput('');
     setIsAiLoading(true);
 
+    // Add empty assistant message for streaming
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: streamingMsgId,
+        role: 'assistant',
+        content: '',
+      },
+    ]);
+
     try {
-      const response = await sendChatMessage({
-        project_id: currentProjectId || '0',
-        query: userMessage.content,
-        session_id: activeChatSessionId || undefined,
-        nodes: nodes,
-        edges: edges,
-        context_mode: contextMode,
-        pinned_node_ids: pinnedNodeIds.length > 0 ? pinnedNodeIds : undefined,
-      });
+      await sendChatMessageStream(
+        {
+          project_id: currentProjectId || '0',
+          query: userMessage.content,
+          session_id: activeChatSessionId || undefined,
+          nodes: nodes,
+          edges: edges,
+          context_mode: contextMode,
+          pinned_node_ids: pinnedNodeIds.length > 0 ? pinnedNodeIds : undefined,
+        },
+        // onToken - append each token to the streaming message
+        (token) => {
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === streamingMsgId
+                ? { ...msg, content: msg.content + token }
+                : msg
+            )
+          );
+        },
+        // onDone - update message with final data
+        (data) => {
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === streamingMsgId
+                ? {
+                    ...msg,
+                    citations: data.citations,
+                    insights: data.insights,
+                  }
+                : msg
+            )
+          );
+          setActiveChatSessionId(data.session_id);
 
-      const assistantMessage: Message = {
-        id: `msg-${Date.now()}`,
-        role: 'assistant',
-        content: response.response,
-        citations: response.citations,
-        contextNodes: response.context_nodes,
-        insights: response.insights,
-      };
+          // Update session token count
+          if (data.insights?.approx_context_tokens) {
+            setSessionTokens((prev) => prev + data.insights.approx_context_tokens);
+          }
 
-      setMessages((prev) => [...prev, assistantMessage]);
-      setActiveChatSessionId(response.session_id);
+          // Highlight cited nodes
+          if (data.citations.length > 0) {
+            setHighlightedAiNodes(data.citations.map((c) => c.nodeId));
+          }
 
-      // Highlight cited nodes
-      if (response.citations.length > 0) {
-        setHighlightedAiNodes(response.citations.map((c) => c.nodeId));
-      }
+          setIsAiLoading(false);
+        },
+        // onError
+        (errorMsg) => {
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === streamingMsgId
+                ? { ...msg, content: `Error: ${errorMsg}` }
+                : msg
+            )
+          );
+          setIsAiLoading(false);
+        }
+      );
     } catch (error) {
-      const errorMessage: Message = {
-        id: `msg-${Date.now()}`,
-        role: 'assistant',
-        content: `Error: ${error instanceof Error ? error.message : 'Failed to get response'}`,
-      };
-      setMessages((prev) => [...prev, errorMessage]);
-    } finally {
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === streamingMsgId
+            ? { ...msg, content: `Error: ${error instanceof Error ? error.message : 'Failed to get response'}` }
+            : msg
+        )
+      );
       setIsAiLoading(false);
     }
   };
@@ -254,16 +325,26 @@ export function ChatSidebar() {
 
     return (
       <div className="mt-2 pt-2 border-t border-neutral-200">
-        <button
-          onClick={() => setExpandedInsights(isExpanded ? null : msgId)}
-          className="flex items-center gap-1 text-xs text-neutral-500 hover:text-neutral-700 w-full"
-        >
-          <BarChart3 className="w-3 h-3" />
-          <span className="flex-1 text-left">
-            {insights.total_context_nodes} nodes · ~{insights.approx_context_tokens} tokens
-          </span>
-          {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-        </button>
+        {/* Always visible summary */}
+        <div className="flex items-center justify-between text-xs">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-neutral-100 text-neutral-600 rounded">
+              <BarChart3 className="w-3 h-3" />
+              {insights.total_context_nodes} nodes
+            </span>
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded font-medium">
+              ~{formatTokens(insights.approx_context_tokens)} tokens
+            </span>
+          </div>
+          <button
+            onClick={() => setExpandedInsights(isExpanded ? null : msgId)}
+            className="flex items-center gap-0.5 text-neutral-400 hover:text-neutral-600 transition-colors"
+            title={isExpanded ? 'Hide details' : 'Show details'}
+          >
+            <span className="text-[10px]">Details</span>
+            {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+          </button>
+        </div>
 
         {isExpanded && (
           <div className="mt-2 space-y-2 text-xs">
@@ -359,6 +440,18 @@ export function ChatSidebar() {
           <h2 className="font-extrabold text-blue-900 uppercase tracking-wide text-sm">
             AI Brain
           </h2>
+          {/* Context usage indicator */}
+          {sessionTokens > 0 && (
+            <div
+              className="flex items-center gap-1 px-2 py-0.5 bg-blue-100 text-blue-800 text-xs font-medium rounded-full"
+              title={`Session context: ${sessionTokens.toLocaleString()} / ${maxContextWindow.toLocaleString()} tokens`}
+            >
+              <BarChart3 className="w-3 h-3" />
+              <span>{formatTokens(sessionTokens)}</span>
+              <span className="text-blue-500">/</span>
+              <span className="text-blue-500">{formatTokens(maxContextWindow)}</span>
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-1">
           <button

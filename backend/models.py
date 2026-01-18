@@ -15,6 +15,12 @@ class CachedZoteroItem(SQLModel, table=True):
     file_type: str  # 'pdf' or 'html'
     item_type: Optional[str] = None  # Zotero item type
     creators_json: Optional[str] = None  # JSON string of creators
+    # Additional metadata
+    publication_date: Optional[str] = None  # Publication date
+    doi: Optional[str] = None  # DOI
+    abstract: Optional[str] = None  # Abstract note
+    publication_title: Optional[str] = None  # Journal/publication name
+    url: Optional[str] = None  # URL
     cached_at: datetime = Field(default_factory=datetime.utcnow)
 
 

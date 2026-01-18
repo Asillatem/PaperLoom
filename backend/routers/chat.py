@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
@@ -311,6 +312,240 @@ EXCERPTS:
             session_id=chat_session.id,
             insights=insights,
         )
+
+
+@router.post("/stream")
+async def chat_stream(req: ChatRequest):
+    """
+    Stream a chat response using Server-Sent Events.
+
+    Sends events:
+    - {"type": "token", "content": "..."} - streamed text tokens
+    - {"type": "done", "session_id": ..., "insights": ..., "citations": [...]} - final event
+    """
+    settings = load_ai_settings()
+    graph_depth = settings.get("graph_depth", 1)
+    context_mode = req.context_mode or "auto"
+
+    # Sync nodes to vector store if provided
+    if req.nodes:
+        node_data = [
+            {
+                "id": n.get("id", ""),
+                "content": n.get("data", {}).get("label", ""),
+                "source_document": n.get("data", {}).get("sourcePdf", ""),
+                "page_index": n.get("data", {}).get("location", {}).get("pageIndex", 0),
+            }
+            for n in req.nodes
+            if n.get("type") == "snippetNode"
+        ]
+        sync_project_nodes(req.project_id, node_data)
+
+    # Build node lookup
+    node_lookup = {}
+    if req.nodes:
+        for n in req.nodes:
+            node_lookup[n.get("id", "")] = n
+
+    # Track node sources and similarity scores
+    node_sources: dict[str, str] = {}
+    node_similarities: dict[str, float] = {}
+
+    # Collect nodes based on context mode
+    retrieved_ids = []
+    rag_node_count = 0
+    pinned_node_count = 0
+
+    if context_mode in ("auto", "hybrid"):
+        search_results = vector_query(
+            query_text=req.query,
+            project_id=req.project_id,
+            n_results=5,
+        )
+        for r in search_results:
+            node_id = r["id"]
+            retrieved_ids.append(node_id)
+            node_sources[node_id] = "rag"
+            node_similarities[node_id] = round(1.0 - r.get("distance", 0), 3)
+        rag_node_count = len(retrieved_ids)
+
+    pinned_ids = req.pinned_node_ids or []
+    if context_mode in ("manual", "hybrid") and pinned_ids:
+        for node_id in pinned_ids:
+            if node_id not in retrieved_ids:
+                retrieved_ids.append(node_id)
+                node_sources[node_id] = "pinned"
+                pinned_node_count += 1
+            elif node_sources.get(node_id) == "rag":
+                node_sources[node_id] = "pinned"
+                pinned_node_count += 1
+                rag_node_count -= 1
+
+    if req.context_node_ids:
+        for node_id in req.context_node_ids:
+            if node_id not in retrieved_ids:
+                retrieved_ids.append(node_id)
+                node_sources[node_id] = "pinned"
+                pinned_node_count += 1
+
+    # Graph expansion
+    edges = req.edges or []
+    expanded_ids = get_connected_nodes(
+        node_ids=retrieved_ids,
+        edges=edges,
+        depth=graph_depth,
+        max_nodes=15,
+    )
+
+    graph_expanded_count = 0
+    for node_id in expanded_ids:
+        if node_id not in node_sources:
+            node_sources[node_id] = "graph"
+            graph_expanded_count += 1
+
+    # Build context
+    context_parts = []
+    node_details = []
+    total_context_chars = 0
+
+    for i, node_id in enumerate(expanded_ids, 1):
+        node = node_lookup.get(node_id)
+        if node and node.get("data"):
+            data = node["data"]
+            label = data.get("label", "")
+            source = data.get("sourceName", data.get("sourcePdf", "Unknown"))
+            if label:
+                context_parts.append(f"[{i}] From \"{source}\":\n{label}")
+                total_context_chars += len(label)
+                node_details.append(NodeInsight(
+                    nodeId=node_id,
+                    source=node_sources.get(node_id, "unknown"),
+                    similarity=node_similarities.get(node_id),
+                    preview=label[:80] + "..." if len(label) > 80 else label,
+                ))
+
+    context_text = "\n\n".join(context_parts) if context_parts else "No relevant excerpts found."
+
+    insights = ChatInsights(
+        total_context_nodes=len(expanded_ids),
+        rag_nodes=rag_node_count,
+        pinned_nodes=pinned_node_count,
+        graph_expanded_nodes=graph_expanded_count,
+        context_mode=context_mode,
+        graph_depth=graph_depth,
+        approx_context_tokens=estimate_tokens(context_text),
+        node_details=node_details,
+    )
+
+    async def generate():
+        """Generate SSE stream."""
+        full_response = ""
+        session_id = None
+
+        try:
+            # Get or create session
+            with Session(engine) as db_session:
+                if req.session_id:
+                    chat_session = db_session.get(ChatSession, req.session_id)
+                    if not chat_session:
+                        yield f"data: {json.dumps({'type': 'error', 'message': 'Session not found'})}\n\n"
+                        return
+                else:
+                    title = req.query[:50] + "..." if len(req.query) > 50 else req.query
+                    chat_session = ChatSession(
+                        project_id=int(req.project_id) if req.project_id.isdigit() else 0,
+                        title=title,
+                    )
+                    db_session.add(chat_session)
+                    db_session.commit()
+                    db_session.refresh(chat_session)
+                session_id = chat_session.id
+
+            # Build messages for LLM
+            system_prompt = settings.get("system_prompt", "You are a helpful assistant.")
+            messages = []
+
+            full_system = f"""{system_prompt}
+
+You have access to the following excerpts from the user's research documents. Reference them using [1], [2], etc. when answering.
+
+EXCERPTS:
+{context_text}"""
+
+            messages.append({"role": "system", "content": full_system})
+
+            # Add chat history
+            with Session(engine) as db_session:
+                history_stmt = (
+                    select(ChatMessage)
+                    .where(ChatMessage.session_id == session_id)
+                    .order_by(ChatMessage.created_at.desc())
+                    .limit(6)
+                )
+                recent_messages = list(reversed(db_session.exec(history_stmt).all()))
+                for msg in recent_messages:
+                    messages.append({"role": msg.role, "content": msg.content})
+
+            messages.append({"role": "user", "content": req.query})
+
+            # Stream from LLM
+            llm = create_llm(settings)
+            async for token in llm.stream(messages):
+                full_response += token
+                yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
+
+            # Parse citations
+            citations = []
+            citation_pattern = r'\[(\d+)\]'
+            cited_numbers = set(re.findall(citation_pattern, full_response))
+
+            for num_str in cited_numbers:
+                idx = int(num_str) - 1
+                if 0 <= idx < len(expanded_ids):
+                    node_id = expanded_ids[idx]
+                    node = node_lookup.get(node_id)
+                    if node and node.get("data"):
+                        preview = node["data"].get("label", "")[:100]
+                        citations.append({"nodeId": node_id, "preview": preview})
+
+            # Save messages
+            with Session(engine) as db_session:
+                user_msg = ChatMessage(
+                    session_id=session_id,
+                    role="user",
+                    content=req.query,
+                    context_nodes_json=json.dumps(expanded_ids),
+                )
+                db_session.add(user_msg)
+
+                assistant_msg = ChatMessage(
+                    session_id=session_id,
+                    role="assistant",
+                    content=full_response,
+                    citations_json=json.dumps(citations),
+                )
+                db_session.add(assistant_msg)
+
+                chat_session = db_session.get(ChatSession, session_id)
+                if chat_session:
+                    chat_session.updated_at = datetime.utcnow()
+                db_session.commit()
+
+            # Send final event
+            yield f"data: {json.dumps({'type': 'done', 'session_id': session_id, 'insights': insights.dict(), 'citations': citations})}\n\n"
+
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.get("/sessions/{project_id}")

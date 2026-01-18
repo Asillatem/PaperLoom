@@ -27,6 +27,9 @@ interface AppStore {
   isAiLoading: boolean;
   activeChatSessionId: number | null;
 
+  // Metadata Panel State
+  metadataPanelKey: string | null;
+
   // Canvas State
   nodes: CanvasNode[];
   edges: SnippetEdge[];
@@ -99,6 +102,10 @@ interface AppStore {
   setHighlightedAiNodes: (nodeIds: string[]) => void;
   setIsAiLoading: (loading: boolean) => void;
   setActiveChatSessionId: (sessionId: number | null) => void;
+
+  // Metadata Panel Actions
+  openMetadataPanel: (attachmentKey: string) => void;
+  closeMetadataPanel: () => void;
 }
 
 export const useAppStore = create<AppStore>()(
@@ -118,6 +125,9 @@ export const useAppStore = create<AppStore>()(
       highlightedAiNodes: [],
       isAiLoading: false,
       activeChatSessionId: null,
+
+      // Initial Metadata Panel State
+      metadataPanelKey: null,
 
       // Initial Canvas State
       nodes: [],
@@ -655,6 +665,13 @@ export const useAppStore = create<AppStore>()(
 
       setActiveChatSessionId: (sessionId) =>
         set({ activeChatSessionId: sessionId }),
+
+      // Metadata Panel Actions
+      openMetadataPanel: (attachmentKey) =>
+        set({ metadataPanelKey: attachmentKey }),
+
+      closeMetadataPanel: () =>
+        set({ metadataPanelKey: null }),
     }),
     {
       name: 'liquid-science-storage',

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Handle, Position } from 'reactflow';
 import type { NodeProps } from 'reactflow';
-import { FileText, Globe, MessageSquare } from 'lucide-react';
+import { FileText, Globe, MessageSquare, Info } from 'lucide-react';
 import type { SnippetNodeData } from '../types';
 import { useAppStore } from '../store/useAppStore';
 import { ContextMenu } from './ContextMenu';
@@ -15,6 +15,7 @@ export function SnippetNodeComponent({ data, selected, id }: NodeProps<SnippetNo
   const jumpToSource = useAppStore((state) => state.jumpToSource);
   const removeNode = useAppStore((state) => state.removeNode);
   const highlightedAiNodes = useAppStore((state) => state.highlightedAiNodes);
+  const openMetadataPanel = useAppStore((state) => state.openMetadataPanel);
 
   const isAiHighlighted = highlightedAiNodes.includes(id);
 
@@ -110,6 +111,18 @@ export function SnippetNodeComponent({ data, selected, id }: NodeProps<SnippetNo
               {isHtml ? 'HTML Snapshot' : `Page ${data.location.pageIndex + 1}`}
             </div>
           </div>
+
+          {/* Info button */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              openMetadataPanel(data.sourcePdf);
+            }}
+            className="p-1 hover:bg-blue-50 rounded-none transition-colors"
+            title="View source details"
+          >
+            <Info className="w-4 h-4 text-neutral-400 hover:text-blue-900" />
+          </button>
 
           {/* Comment indicator */}
           {hasComments && (

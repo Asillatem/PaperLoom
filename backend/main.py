@@ -123,9 +123,9 @@ async def sync_library(limit: int = 0) -> dict:
 
 		with Session(engine) as session:
 			# Clear existing cache
-			session.exec(select(CachedZoteroItem)).all()
 			for existing in session.exec(select(CachedZoteroItem)).all():
 				session.delete(existing)
+			session.commit()
 
 			# Insert new items
 			count = 0
@@ -139,6 +139,11 @@ async def sync_library(limit: int = 0) -> dict:
 						file_type=attachment["type"],
 						item_type=item["itemType"],
 						creators_json=json.dumps(item.get("creators", [])),
+						publication_date=item.get("date", ""),
+						doi=item.get("DOI", ""),
+						abstract=item.get("abstractNote", ""),
+						publication_title=item.get("publicationTitle", ""),
+						url=item.get("url", ""),
 						cached_at=datetime.utcnow(),
 					)
 					session.add(cached)
@@ -210,6 +215,56 @@ async def get_file(attachment_key: str, download: Optional[bool] = False):
 		raise HTTPException(status_code=404, detail=str(e))
 	except Exception as e:
 		raise HTTPException(status_code=500, detail=f"Error fetching file: {str(e)}")
+
+
+@app.get("/metadata/{attachment_key}")
+async def get_item_metadata(attachment_key: str):
+	"""
+	Get metadata for a Zotero item by its attachment key.
+	Returns authors, publication date, DOI, abstract, etc.
+	"""
+	with Session(engine) as session:
+		statement = select(CachedZoteroItem).where(CachedZoteroItem.key == attachment_key)
+		item = session.exec(statement).first()
+
+		if not item:
+			raise HTTPException(status_code=404, detail="Item not found in cache. Try syncing library.")
+
+		# Parse creators JSON
+		creators = []
+		if item.creators_json:
+			try:
+				creators = json.loads(item.creators_json)
+			except json.JSONDecodeError:
+				pass
+
+		# Format creators as readable strings
+		authors = []
+		for creator in creators:
+			name_parts = []
+			if creator.get("firstName"):
+				name_parts.append(creator["firstName"])
+			if creator.get("lastName"):
+				name_parts.append(creator["lastName"])
+			if name_parts:
+				authors.append(" ".join(name_parts))
+			elif creator.get("name"):
+				authors.append(creator["name"])
+
+		return {
+			"key": item.key,
+			"parentKey": item.parent_key,
+			"title": item.name,
+			"authors": authors,
+			"publicationDate": item.publication_date or "",
+			"doi": item.doi or "",
+			"abstract": item.abstract or "",
+			"publicationTitle": item.publication_title or "",
+			"url": item.url or "",
+			"itemType": item.item_type or "",
+			"filename": item.filename,
+			"fileType": item.file_type,
+		}
 
 
 @app.post("/save")

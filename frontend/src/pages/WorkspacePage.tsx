@@ -7,6 +7,7 @@ import { HTMLViewer } from '../components/HTMLViewer';
 import { PDFControls } from '../components/PDFControls';
 import { Canvas } from '../components/Canvas';
 import { ChatSidebar } from '../components/ChatSidebar';
+import { SnippetMetadataPanel } from '../components/SnippetMetadataPanel';
 import { useAppStore } from '../store/useAppStore';
 import { loadProjectFromServer } from '../api';
 
@@ -18,6 +19,8 @@ export function WorkspacePage() {
   const setCurrentProjectId = useAppStore((state) => state.setCurrentProjectId);
   const loadProject = useAppStore((state) => state.loadProject);
   const isDirty = useAppStore((state) => state.isDirty);
+  const metadataPanelKey = useAppStore((state) => state.metadataPanelKey);
+  const closeMetadataPanel = useAppStore((state) => state.closeMetadataPanel);
 
   // Block navigation when there are unsaved changes
   const blocker = useBlocker(
@@ -125,6 +128,14 @@ export function WorkspacePage() {
 
       {/* AI Brain Chat Sidebar */}
       <ChatSidebar />
+
+      {/* Source Metadata Panel */}
+      {metadataPanelKey && (
+        <SnippetMetadataPanel
+          attachmentKey={metadataPanelKey}
+          onClose={closeMetadataPanel}
+        />
+      )}
     </div>
   );
 }
