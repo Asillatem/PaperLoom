@@ -65,6 +65,17 @@ export interface NoteNodeData {
   comments: Comment[]; // Node comments
 }
 
+// Staged item in capture inbox (before placing on canvas)
+export interface StagedItem {
+  id: string;
+  text: string;
+  sourcePdf: string; // Zotero attachment key
+  sourceName: string; // Display name
+  sourceType: 'pdf' | 'html';
+  location: PDFLocation;
+  capturedAt: number; // Timestamp for ordering
+}
+
 // ReactFlow node with our custom data
 export interface SnippetNode {
   id: string;

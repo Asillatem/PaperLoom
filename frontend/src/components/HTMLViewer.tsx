@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { getHtmlUrl } from '../api';
-import type { SnippetNode } from '../types';
+import type { StagedItem } from '../types';
 
 // Script to inject into HTML for selection handling and highlights
 const SELECTION_SCRIPT = `
@@ -139,8 +139,7 @@ export function HTMLViewer() {
   const nodes = useAppStore((state) => state.nodes);
   const highlights = useAppStore((state) => state.highlights);
   const highlightedRect = useAppStore((state) => state.pdfViewerState.highlightedRect);
-  const addNode = useAppStore((state) => state.addNode);
-  const addHighlight = useAppStore((state) => state.addHighlight);
+  const addToStaging = useAppStore((state) => state.addToStaging);
 
   // Fetch HTML content and inject selection script
   useEffect(() => {
@@ -236,55 +235,34 @@ export function HTMLViewer() {
     if (event.data?.type === 'HTML_TEXT_SELECTION') {
       const { text, boundingRect, scrollPosition } = event.data.payload;
 
-      // Create snippet node from HTML selection
-      const nodeId = `node-${Date.now()}`;
-      const newNode: SnippetNode = {
-        id: nodeId,
-        type: 'snippetNode',
-        data: {
-          label: text,
-          sourcePdf: selectedFile?.path || '',
-          sourceName: selectedFile?.name || 'Unknown',
-          sourceType: 'html',
-          location: {
-            pageIndex: 0, // HTML doesn't have pages, use 0
-            rect: {
-              x: boundingRect.x,
-              y: boundingRect.y + scrollPosition.y, // Include scroll position
-              width: boundingRect.width,
-              height: boundingRect.height,
-            },
-            highlightRects: [{
-              x: boundingRect.x,
-              y: boundingRect.y + scrollPosition.y,
-              width: boundingRect.width,
-              height: boundingRect.height,
-            }],
+      // Create staged item (goes to inbox first)
+      const stagedItem: StagedItem = {
+        id: `staged-${Date.now()}`,
+        text,
+        sourcePdf: selectedFile?.path || '',
+        sourceName: selectedFile?.name || 'Unknown',
+        sourceType: 'html',
+        location: {
+          pageIndex: 0, // HTML doesn't have pages, use 0
+          rect: {
+            x: boundingRect.x,
+            y: boundingRect.y + scrollPosition.y, // Include scroll position
+            width: boundingRect.width,
+            height: boundingRect.height,
           },
-          comments: [],
+          highlightRects: [{
+            x: boundingRect.x,
+            y: boundingRect.y + scrollPosition.y,
+            width: boundingRect.width,
+            height: boundingRect.height,
+          }],
         },
-        position: {
-          x: 100 + (nodes.length * 30) % 400,
-          y: 100 + (nodes.length * 30) % 400,
-        },
+        capturedAt: Date.now(),
       };
 
-      addNode(newNode);
-
-      // Add highlight for rendering
-      addHighlight({
-        id: nodeId,
-        pdfPath: selectedFile?.path || '',
-        pageIndex: 0,
-        rects: [{
-          x: boundingRect.x,
-          y: boundingRect.y + scrollPosition.y,
-          width: boundingRect.width,
-          height: boundingRect.height,
-        }],
-      });
+      addToStaging(stagedItem);
     }
-  }, [selectedFile, nodes.length, addNode, addHighlight]);
+  }, [selectedFile, addToStaging]);
 
   // Listen for messages from iframe
   useEffect(() => {

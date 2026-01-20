@@ -15,9 +15,10 @@ from datetime import datetime
 
 from database import create_db_and_tables, get_session, engine
 from services.zotero import get_zotero_service
-from models import CachedZoteroItem
+from models import CachedZoteroItem, ChatSession, ChatMessage
 import models  # noqa: F401 - imported for SQLModel metadata
 from routers import settings, chat
+from fastapi.responses import PlainTextResponse
 
 
 # Configuration from environment variables with sensible defaults
@@ -339,4 +340,158 @@ async def delete_project(filename: str):
 
 	target.unlink()
 	return {"status": "deleted", "filename": filename}
+
+
+@app.get("/projects/{filename}/export")
+async def export_project(filename: str, format: str = "json"):
+	"""
+	Export a project with its chat history.
+
+	Args:
+		filename: The project filename (e.g., "My Project.json")
+		format: Export format - "json" or "markdown"
+	"""
+	target = safe_resolve(PROJECTS_DIR, filename)
+
+	if not target.exists():
+		raise HTTPException(status_code=404, detail="Project not found")
+
+	# Load project data
+	async with aiofiles.open(target, "r", encoding="utf-8") as f:
+		content = await f.read()
+		project_data = json.loads(content)
+
+	# Get project ID from filename (remove .json extension)
+	project_id = filename.replace(".json", "")
+
+	# Fetch chat sessions for this project
+	chat_sessions = []
+	with Session(engine) as session:
+		statement = select(ChatSession).where(ChatSession.project_id == project_id)
+		sessions = session.exec(statement).all()
+
+		for chat_session in sessions:
+			# Get messages for this session
+			msg_statement = select(ChatMessage).where(
+				ChatMessage.session_id == chat_session.id
+			).order_by(ChatMessage.created_at)
+			messages = session.exec(msg_statement).all()
+
+			chat_sessions.append({
+				"id": chat_session.id,
+				"title": chat_session.title,
+				"created_at": chat_session.created_at.isoformat() if chat_session.created_at else None,
+				"updated_at": chat_session.updated_at.isoformat() if chat_session.updated_at else None,
+				"messages": [
+					{
+						"role": msg.role,
+						"content": msg.content,
+						"created_at": msg.created_at.isoformat() if msg.created_at else None,
+						"citations": json.loads(msg.citations_json) if msg.citations_json else [],
+					}
+					for msg in messages
+				]
+			})
+
+	if format == "markdown":
+		return _generate_markdown_export(project_data, chat_sessions)
+	else:
+		return {
+			"project": project_data,
+			"chatHistory": chat_sessions,
+			"exportedAt": datetime.utcnow().isoformat(),
+		}
+
+
+def _generate_markdown_export(project_data: dict, chat_sessions: list) -> PlainTextResponse:
+	"""Generate a human-readable markdown export of the project."""
+	lines = []
+
+	# Header
+	metadata = project_data.get("metadata", {})
+	project_name = metadata.get("name", "Untitled Project")
+	lines.append(f"# {project_name}")
+	lines.append("")
+
+	# Project info
+	if metadata.get("created"):
+		created = datetime.fromtimestamp(metadata["created"] / 1000).strftime("%Y-%m-%d %H:%M")
+		lines.append(f"**Created:** {created}")
+	if metadata.get("modified"):
+		modified = datetime.fromtimestamp(metadata["modified"] / 1000).strftime("%Y-%m-%d %H:%M")
+		lines.append(f"**Last Modified:** {modified}")
+	lines.append("")
+
+	# Canvas Nodes
+	nodes = project_data.get("nodes", [])
+	if nodes:
+		lines.append("## Canvas Nodes")
+		lines.append("")
+		for node in nodes:
+			node_type = node.get("type", "unknown")
+			data = node.get("data", {})
+
+			if node_type == "snippetNode":
+				source = data.get("sourceName", data.get("sourcePdf", "Unknown source"))
+				label = data.get("label", "")[:200]
+				page = data.get("location", {}).get("pageIndex", 0) + 1
+				lines.append(f"- **[Snippet]** \"{label}...\" *(from {source}, p.{page})*")
+			elif node_type == "noteNode":
+				label = data.get("label", "Empty note")
+				color = data.get("color", "yellow")
+				lines.append(f"- **[Note - {color}]** {label}")
+		lines.append("")
+
+	# Edges/Connections
+	edges = project_data.get("edges", [])
+	if edges:
+		lines.append("## Connections")
+		lines.append("")
+		for edge in edges:
+			label = edge.get("label", "")
+			direction = edge.get("arrowDirection", "forward")
+			arrow = "→" if direction == "forward" else "←" if direction == "backward" else "↔" if direction == "both" else "—"
+			label_part = f': "{label}"' if label else ""
+			lines.append(f"- Node {edge.get('source', '?')} {arrow} Node {edge.get('target', '?')}{label_part}")
+		lines.append("")
+
+	# Chat History
+	if chat_sessions:
+		lines.append("## AI Chat History")
+		lines.append("")
+
+		for session in chat_sessions:
+			session_date = session.get("updated_at", session.get("created_at", "Unknown"))
+			if session_date != "Unknown":
+				try:
+					session_date = datetime.fromisoformat(session_date.replace("Z", "+00:00")).strftime("%Y-%m-%d %H:%M")
+				except:
+					pass
+
+			lines.append(f"### {session.get('title', 'Untitled Session')} ({session_date})")
+			lines.append("")
+
+			for msg in session.get("messages", []):
+				role = msg.get("role", "unknown").capitalize()
+				content = msg.get("content", "")
+
+				if role == "User":
+					lines.append(f"**User:** {content}")
+				else:
+					lines.append(f"**AI:** {content}")
+				lines.append("")
+
+	# Footer
+	lines.append("---")
+	lines.append(f"*Exported from Liquid Science on {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}*")
+
+	markdown_content = "\n".join(lines)
+
+	return PlainTextResponse(
+		content=markdown_content,
+		media_type="text/markdown",
+		headers={
+			"Content-Disposition": f'attachment; filename="{project_name}.md"'
+		}
+	)
 

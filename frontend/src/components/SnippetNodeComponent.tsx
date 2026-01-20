@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Handle, Position } from 'reactflow';
 import type { NodeProps } from 'reactflow';
-import { FileText, Globe, MessageSquare, Info } from 'lucide-react';
+import { FileText, Globe, MessageSquare, Info, ChevronDown, ChevronRight } from 'lucide-react';
 import type { SnippetNodeData } from '../types';
 import { useAppStore } from '../store/useAppStore';
 import { ContextMenu } from './ContextMenu';
@@ -16,8 +16,11 @@ export function SnippetNodeComponent({ data, selected, id }: NodeProps<SnippetNo
   const removeNode = useAppStore((state) => state.removeNode);
   const highlightedAiNodes = useAppStore((state) => state.highlightedAiNodes);
   const openMetadataPanel = useAppStore((state) => state.openMetadataPanel);
+  const collapsedNodeIds = useAppStore((state) => state.collapsedNodeIds);
+  const toggleNodeCollapsed = useAppStore((state) => state.toggleNodeCollapsed);
 
   const isAiHighlighted = highlightedAiNodes.includes(id);
+  const isCollapsed = collapsedNodeIds.includes(id);
 
   const comments = data.comments || [];
   const hasComments = comments.length > 0;
@@ -51,8 +54,9 @@ export function SnippetNodeComponent({ data, selected, id }: NodeProps<SnippetNo
   const isHtml = data.sourceType === 'html';
   const SourceIcon = isHtml ? Globe : FileText;
 
-  const displayText =
-    data.label.length > 200 ? data.label.substring(0, 200) + '...' : data.label;
+  // Show full text (no truncation) since we have scroll now
+  const displayText = data.label;
+  const isLongContent = data.label.length > 200;
 
   return (
     <>
@@ -94,35 +98,55 @@ export function SnippetNodeComponent({ data, selected, id }: NodeProps<SnippetNo
       <div
         onContextMenu={handleContextMenu}
         className={`
-          bg-white shadow-sm p-4 rounded-none border-l-4 transition-all
+          bg-white shadow-sm rounded-none border-l-4 transition-all
           ${selected ? 'border-l-blue-900 shadow-lg ring-2 ring-blue-900' : 'border-l-blue-900'}
-          ${isAiHighlighted ? 'ring-2 ring-yellow-400 ring-offset-2 shadow-lg shadow-yellow-200' : ''}
-          min-w-[220px] max-w-[400px]
+          ${isAiHighlighted ? 'node-ai-glow ring-2 ring-yellow-400' : ''}
+          ${isCollapsed ? 'min-w-[180px] max-w-[300px]' : 'min-w-[220px] max-w-[400px]'}
         `}
       >
         {/* Header with source info */}
-        <div className="flex items-center gap-2 mb-3 pb-2 border-b border-neutral-200">
+        <div className={`flex items-center gap-2 p-3 ${!isCollapsed ? 'pb-2 border-b border-neutral-200' : ''}`}>
+          {/* Collapse toggle */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleNodeCollapsed(id);
+            }}
+            className="p-0.5 hover:bg-neutral-100 rounded-none transition-colors"
+            title={isCollapsed ? 'Expand' : 'Collapse'}
+          >
+            {isCollapsed ? (
+              <ChevronRight className="w-4 h-4 text-neutral-400" />
+            ) : (
+              <ChevronDown className="w-4 h-4 text-neutral-400" />
+            )}
+          </button>
+
           <SourceIcon className={`w-4 h-4 flex-shrink-0 ${isHtml ? 'text-green-600' : 'text-blue-900'}`} />
           <div className="flex-1 min-w-0">
             <div className="text-xs font-bold text-neutral-800 truncate" title={displayName}>
               {displayName}
             </div>
-            <div className="text-xs text-neutral-500">
-              {isHtml ? 'HTML Snapshot' : `Page ${data.location.pageIndex + 1}`}
-            </div>
+            {!isCollapsed && (
+              <div className="text-xs text-neutral-500">
+                {isHtml ? 'HTML Snapshot' : `Page ${data.location.pageIndex + 1}`}
+              </div>
+            )}
           </div>
 
-          {/* Info button */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              openMetadataPanel(data.sourcePdf);
-            }}
-            className="p-1 hover:bg-blue-50 rounded-none transition-colors"
-            title="View source details"
-          >
-            <Info className="w-4 h-4 text-neutral-400 hover:text-blue-900" />
-          </button>
+          {/* Info button - only show when expanded */}
+          {!isCollapsed && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                openMetadataPanel(data.sourcePdf);
+              }}
+              className="p-1 hover:bg-blue-50 rounded-none transition-colors"
+              title="View source details"
+            >
+              <Info className="w-4 h-4 text-neutral-400 hover:text-blue-900" />
+            </button>
+          )}
 
           {/* Comment indicator */}
           {hasComments && (
@@ -142,31 +166,40 @@ export function SnippetNodeComponent({ data, selected, id }: NodeProps<SnippetNo
           )}
         </div>
 
-        {/* Extracted text content */}
-        <div className="text-sm text-neutral-800 whitespace-pre-wrap mb-3 leading-relaxed">
-          {displayText}
-        </div>
-
-        {/* Footer with actions */}
-        <div className="flex gap-3 pt-2 border-t border-neutral-100">
-          <button
-            onClick={handleJumpToSource}
-            className="text-xs font-bold text-blue-900 hover:underline transition-colors uppercase tracking-wide"
-          >
-            Jump to source
-          </button>
-          {!hasComments && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowCommentPopover(true);
-              }}
-              className="text-xs text-neutral-500 hover:text-neutral-700 transition-colors"
+        {/* Content and footer - only show when expanded */}
+        {!isCollapsed && (
+          <div className="px-3 pb-3">
+            {/* Extracted text content with scroll for long content */}
+            <div
+              className={`text-sm text-neutral-800 whitespace-pre-wrap mb-3 leading-relaxed ${
+                isLongContent ? 'max-h-[200px] overflow-y-auto pr-2' : ''
+              }`}
             >
-              Add comment
-            </button>
-          )}
-        </div>
+              {displayText}
+            </div>
+
+            {/* Footer with actions */}
+            <div className="flex gap-3 pt-2 border-t border-neutral-100">
+              <button
+                onClick={handleJumpToSource}
+                className="text-xs font-bold text-blue-900 hover:underline transition-colors uppercase tracking-wide"
+              >
+                Jump to source
+              </button>
+              {!hasComments && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowCommentPopover(true);
+                  }}
+                  className="text-xs text-neutral-500 hover:text-neutral-700 transition-colors"
+                >
+                  Add comment
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Context Menu */}

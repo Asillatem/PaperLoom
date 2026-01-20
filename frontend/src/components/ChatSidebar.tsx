@@ -22,6 +22,7 @@ import {
   getChatSessions,
   getChatSession,
   deleteChatSession,
+  generateChatSummary,
   getAISettings,
   type ChatCitation,
   type ChatInsights,
@@ -59,7 +60,6 @@ export function ChatSidebar() {
     toggleChatSidebar,
     nodes,
     edges,
-    highlightedAiNodes,
     setHighlightedAiNodes,
     isAiLoading,
     setIsAiLoading,
@@ -80,6 +80,8 @@ export function ChatSidebar() {
   const [loadingSessions, setLoadingSessions] = useState(false);
   const [sessionTokens, setSessionTokens] = useState(0);
   const [maxContextWindow, setMaxContextWindow] = useState(128000); // Default 128k
+  const [summary, setSummary] = useState<string | null>(null);
+  const [loadingSummary, setLoadingSummary] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -174,6 +176,22 @@ export function ChatSidebar() {
     setShowHistory(false);
     setPinnedNodeIds([]);
     setSessionTokens(0);
+    setSummary(null);
+  };
+
+  const handleGenerateSummary = async () => {
+    if (!activeChatSessionId || loadingSummary) return;
+
+    setLoadingSummary(true);
+    try {
+      const result = await generateChatSummary(activeChatSessionId);
+      setSummary(result.summary);
+    } catch (error) {
+      console.error('Failed to generate summary:', error);
+      alert('Failed to generate summary');
+    } finally {
+      setLoadingSummary(false);
+    }
   };
 
   const togglePinnedNode = (nodeId: string) => {
@@ -624,6 +642,44 @@ export function ChatSidebar() {
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-3 space-y-3">
+        {/* Summary section - show for long conversations */}
+        {messages.length >= 6 && activeChatSessionId && (
+          <div className="bg-blue-50 border border-blue-200 rounded p-3 mb-2">
+            {summary ? (
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-xs font-bold text-blue-900 uppercase">Summary</h4>
+                  <button
+                    onClick={() => setSummary(null)}
+                    className="text-xs text-blue-600 hover:text-blue-800"
+                  >
+                    Hide
+                  </button>
+                </div>
+                <p className="text-sm text-blue-800 whitespace-pre-wrap">{summary}</p>
+              </div>
+            ) : (
+              <button
+                onClick={handleGenerateSummary}
+                disabled={loadingSummary}
+                className="w-full flex items-center justify-center gap-2 text-sm text-blue-900 hover:text-blue-700 py-1"
+              >
+                {loadingSummary ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Generating summary...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4" />
+                    Summarize this conversation
+                  </>
+                )}
+              </button>
+            )}
+          </div>
+        )}
+
         {messages.length === 0 && (
           <div className="text-center text-neutral-500 py-8">
             <Brain className="w-10 h-10 mx-auto mb-3 text-neutral-300" />
@@ -660,13 +716,25 @@ export function ChatSidebar() {
           </div>
         ))}
 
-        {isAiLoading && (
-          <div className="flex justify-start">
-            <div className="bg-neutral-100 p-3 border border-neutral-200 rounded">
-              <Loader2 className="w-5 h-5 animate-spin text-blue-900" />
+        {/* Thinking indicator - only show when loading and no streaming content yet */}
+        {isAiLoading && (() => {
+          const lastMsg = messages[messages.length - 1];
+          const isStreaming = lastMsg?.role === 'assistant' && lastMsg?.content?.length > 0;
+          if (isStreaming) return null; // Content is streaming, hide indicator
+          return (
+            <div className="flex justify-start">
+              <div className="bg-neutral-100 p-3 border border-neutral-200 rounded flex items-center gap-2">
+                <Brain className="w-4 h-4 text-blue-900" />
+                <span className="text-sm text-blue-900 font-medium">Thinking</span>
+                <span className="thinking-dots text-blue-900 font-bold">
+                  <span>.</span>
+                  <span>.</span>
+                  <span>.</span>
+                </span>
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         <div ref={messagesEndRef} />
       </div>

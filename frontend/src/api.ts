@@ -131,6 +131,49 @@ export async function deleteProject(filename: string): Promise<void> {
   }
 }
 
+/**
+ * Export a project with chat history
+ * @param filename - The project filename
+ * @param format - Export format: "json" or "markdown"
+ */
+export async function exportProject(filename: string, format: 'json' | 'markdown' = 'json'): Promise<void> {
+  const resp = await fetch(
+    `${API_BASE}/projects/${encodeURIComponent(filename)}/export?format=${format}`
+  );
+  if (!resp.ok) {
+    throw new Error(`Failed to export project: ${resp.status} ${resp.statusText}`);
+  }
+
+  // Get content and trigger download
+  if (format === 'markdown') {
+    const text = await resp.text();
+    const blob = new Blob([text], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const projectName = filename.replace('.json', '');
+    downloadFile(url, `${projectName}.md`);
+    URL.revokeObjectURL(url);
+  } else {
+    const data = await resp.json();
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const projectName = filename.replace('.json', '');
+    downloadFile(url, `${projectName}-export.json`);
+    URL.revokeObjectURL(url);
+  }
+}
+
+/**
+ * Helper to trigger file download
+ */
+function downloadFile(url: string, filename: string): void {
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
 // ============================================
 // AI Settings API
 // ============================================
@@ -388,4 +431,22 @@ export async function deleteChatSession(sessionId: number): Promise<void> {
   if (!resp.ok) {
     throw new Error(`Failed to delete session: ${resp.status}`);
   }
+}
+
+export interface ChatSummaryResponse {
+  summary: string;
+  message_count: number;
+  session_id: number;
+}
+
+/**
+ * Generate a summary of a chat session
+ */
+export async function generateChatSummary(sessionId: number): Promise<ChatSummaryResponse> {
+  const resp = await fetch(`${API_BASE}/chat/sessions/${sessionId}/summary`, { method: 'POST' });
+  if (!resp.ok) {
+    const error = await resp.json().catch(() => ({}));
+    throw new Error(error.detail || `Failed to generate summary: ${resp.status}`);
+  }
+  return resp.json();
 }

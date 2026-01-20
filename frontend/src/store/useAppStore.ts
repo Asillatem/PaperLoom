@@ -12,11 +12,23 @@ import type {
   CanvasNode,
   NoteNode,
   ArrowDirection,
+  StagedItem,
+  SnippetNode,
 } from '../types';
 import type { Connection, EdgeChange } from 'reactflow';
 import { applyEdgeChanges } from 'reactflow';
 
+interface ViewportState {
+  x: number;
+  y: number;
+  zoom: number;
+}
+
 interface AppStore {
+  // UI State
+  focusMode: boolean;
+  collapsedNodeIds: string[];
+
   // PDF State
   selectedPdf: FileEntry | null;
   pdfViewerState: PDFViewerState;
@@ -33,9 +45,14 @@ interface AppStore {
   // Canvas State
   nodes: CanvasNode[];
   edges: SnippetEdge[];
+  viewportState: ViewportState | null;
 
   // Highlight State
   highlights: PersistentHighlight[];
+
+  // Staging State (Capture Inbox)
+  stagedItems: StagedItem[];
+  stagingExpanded: boolean;
 
   // Selection State
   selectionState: SelectionState;
@@ -68,10 +85,21 @@ interface AppStore {
   onEdgesChange: (changes: EdgeChange[]) => void;
   onConnect: (connection: Connection) => void;
 
+  // Canvas Viewport Actions
+  setViewportState: (viewport: ViewportState) => void;
+
   // Highlight Actions
   addHighlight: (highlight: PersistentHighlight) => void;
   removeHighlight: (highlightId: string) => void;
   getHighlightsForPage: (pageIndex: number) => PersistentHighlight[];
+
+  // Staging Actions (Capture Inbox)
+  addToStaging: (item: StagedItem) => void;
+  removeFromStaging: (id: string) => void;
+  clearStaging: () => void;
+  moveToCanvas: (id: string, position?: { x: number; y: number }) => void;
+  moveAllToCanvas: () => void;
+  toggleStagingExpanded: () => void;
 
   // Comment Actions
   addComment: (nodeId: string, text: string) => void;
@@ -106,11 +134,20 @@ interface AppStore {
   // Metadata Panel Actions
   openMetadataPanel: (attachmentKey: string) => void;
   closeMetadataPanel: () => void;
+
+  // UI Actions
+  toggleFocusMode: () => void;
+  toggleNodeCollapsed: (nodeId: string) => void;
+  isNodeCollapsed: (nodeId: string) => boolean;
 }
 
 export const useAppStore = create<AppStore>()(
   persist(
     (set, get) => ({
+      // Initial UI State
+      focusMode: false,
+      collapsedNodeIds: [],
+
       // Initial PDF State
       selectedPdf: null,
       pdfViewerState: {
@@ -132,9 +169,14 @@ export const useAppStore = create<AppStore>()(
       // Initial Canvas State
       nodes: [],
       edges: [],
+      viewportState: null,
 
       // Initial Highlight State
       highlights: [],
+
+      // Initial Staging State
+      stagedItems: [],
+      stagingExpanded: true,
 
       // Initial Selection State
       selectionState: {
@@ -387,6 +429,10 @@ export const useAppStore = create<AppStore>()(
         }));
       },
 
+      // Viewport Actions
+      setViewportState: (viewport) =>
+        set({ viewportState: viewport }),
+
       // Highlight Actions
       addHighlight: (highlight) =>
         set((state) => ({
@@ -404,6 +450,159 @@ export const useAppStore = create<AppStore>()(
         const state = get();
         return state.highlights.filter((h) => h.pageIndex === pageIndex);
       },
+
+      // Staging Actions
+      addToStaging: (item) =>
+        set((state) => {
+          // Create pink highlight for staged item
+          const stagingHighlight: PersistentHighlight = {
+            id: item.id, // Use staged item ID
+            pdfPath: item.sourcePdf,
+            pageIndex: item.location.pageIndex,
+            rects: item.location.highlightRects || [],
+            color: 'rgba(255, 182, 193, 0.5)', // Pink for staging
+          };
+
+          return {
+            stagedItems: [...state.stagedItems, item],
+            highlights: [...state.highlights, stagingHighlight],
+          };
+        }),
+
+      removeFromStaging: (id) =>
+        set((state) => ({
+          stagedItems: state.stagedItems.filter((item) => item.id !== id),
+          highlights: state.highlights.filter((h) => h.id !== id), // Remove pink highlight
+        })),
+
+      clearStaging: () =>
+        set((state) => {
+          // Get all staged item IDs to remove their highlights
+          const stagedIds = new Set(state.stagedItems.map((item) => item.id));
+          return {
+            stagedItems: [],
+            highlights: state.highlights.filter((h) => !stagedIds.has(h.id)),
+          };
+        }),
+
+      moveToCanvas: (id, position) => {
+        const state = get();
+        const item = state.stagedItems.find((i) => i.id === id);
+        if (!item) return;
+
+        // Calculate position: use provided position or stagger based on existing nodes
+        const finalPosition = position || {
+          x: 100 + state.nodes.length * 30,
+          y: 100 + state.nodes.length * 30,
+        };
+
+        // Create snippet node from staged item
+        const snippetNode: SnippetNode = {
+          id: `node-${Date.now()}`,
+          type: 'snippetNode',
+          data: {
+            label: item.text,
+            sourcePdf: item.sourcePdf,
+            sourceName: item.sourceName,
+            sourceType: item.sourceType,
+            location: item.location,
+            comments: [],
+          },
+          position: finalPosition,
+        };
+
+        // Create yellow highlight for the canvas node
+        const highlight: PersistentHighlight = {
+          id: snippetNode.id,
+          pdfPath: item.sourcePdf,
+          pageIndex: item.location.pageIndex,
+          rects: item.location.highlightRects || [],
+          color: 'rgba(255, 255, 0, 0.4)', // Yellow for canvas items
+        };
+
+        set((state) => ({
+          nodes: [...state.nodes, snippetNode],
+          // Remove pink staging highlight, add yellow canvas highlight
+          highlights: [
+            ...state.highlights.filter((h) => h.id !== id),
+            highlight,
+          ],
+          stagedItems: state.stagedItems.filter((i) => i.id !== id),
+          isDirty: true,
+          projectMetadata: {
+            ...state.projectMetadata,
+            modified: Date.now(),
+          },
+        }));
+      },
+
+      moveAllToCanvas: () => {
+        const state = get();
+        if (state.stagedItems.length === 0) return;
+
+        const baseX = 100;
+        const baseY = 100;
+        const offset = 30;
+        const startIndex = state.nodes.length;
+
+        const newNodes: SnippetNode[] = [];
+        const newHighlights: PersistentHighlight[] = [];
+        const stagedIds = new Set(state.stagedItems.map((item) => item.id));
+
+        state.stagedItems.forEach((item, index) => {
+          const nodeId = `node-${Date.now()}-${index}`;
+
+          const snippetNode: SnippetNode = {
+            id: nodeId,
+            type: 'snippetNode',
+            data: {
+              label: item.text,
+              sourcePdf: item.sourcePdf,
+              sourceName: item.sourceName,
+              sourceType: item.sourceType,
+              location: item.location,
+              comments: [],
+            },
+            position: {
+              x: baseX + (startIndex + index) * offset,
+              y: baseY + (startIndex + index) * offset,
+            },
+          };
+
+          // Yellow highlight for canvas items
+          const highlight: PersistentHighlight = {
+            id: nodeId,
+            pdfPath: item.sourcePdf,
+            pageIndex: item.location.pageIndex,
+            rects: item.location.highlightRects || [],
+            color: 'rgba(255, 255, 0, 0.4)', // Yellow for canvas items
+          };
+
+          newNodes.push(snippetNode);
+          newHighlights.push(highlight);
+        });
+
+        set((state) => {
+          // Remove all pink staging highlights, add yellow canvas highlights
+          const filteredHighlights = state.highlights.filter((h) => !stagedIds.has(h.id));
+
+          return {
+            nodes: [...state.nodes, ...newNodes],
+            highlights: [...filteredHighlights, ...newHighlights],
+            stagedItems: [],
+            isDirty: true,
+            projectMetadata: {
+              ...state.projectMetadata,
+              modified: Date.now(),
+            },
+          };
+        });
+      },
+
+      toggleStagingExpanded: () =>
+        set((state) => ({
+          stagingExpanded: !state.stagingExpanded,
+        })),
 
       // Comment Actions
       addComment: (nodeId, text) =>
@@ -582,6 +781,7 @@ export const useAppStore = create<AppStore>()(
           })) as CanvasNode[],
           edges: data.edges || [], // Handle old projects without edges
           selectedItemKeys: data.selectedItemKeys || [], // Handle old projects
+          stagedItems: [], // Clear staging when loading a project
           pdfViewerState: {
             currentPage: data.pdfState.currentPage,
             scale: data.pdfState.scale,
@@ -596,9 +796,11 @@ export const useAppStore = create<AppStore>()(
           nodes: [],
           edges: [],
           highlights: [],
+          stagedItems: [],
           selectedPdf: null,
           selectedItemKeys: [],
           currentProjectId: null,
+          viewportState: null,
           pdfViewerState: {
             currentPage: 1,
             numPages: null,
@@ -672,6 +874,22 @@ export const useAppStore = create<AppStore>()(
 
       closeMetadataPanel: () =>
         set({ metadataPanelKey: null }),
+
+      // UI Actions
+      toggleFocusMode: () =>
+        set((state) => ({ focusMode: !state.focusMode })),
+
+      toggleNodeCollapsed: (nodeId) =>
+        set((state) => ({
+          collapsedNodeIds: state.collapsedNodeIds.includes(nodeId)
+            ? state.collapsedNodeIds.filter((id) => id !== nodeId)
+            : [...state.collapsedNodeIds, nodeId],
+        })),
+
+      isNodeCollapsed: (nodeId) => {
+        const state = get();
+        return state.collapsedNodeIds.includes(nodeId);
+      },
     }),
     {
       name: 'liquid-science-storage',
@@ -680,6 +898,8 @@ export const useAppStore = create<AppStore>()(
         nodes: state.nodes,
         edges: state.edges,
         highlights: state.highlights,
+        stagedItems: state.stagedItems,
+        stagingExpanded: state.stagingExpanded,
         projectMetadata: state.projectMetadata,
         currentProjectId: state.currentProjectId,
         selectedItemKeys: state.selectedItemKeys,
@@ -687,6 +907,7 @@ export const useAppStore = create<AppStore>()(
         pdfViewerState: {
           scale: state.pdfViewerState.scale,
         },
+        viewportState: state.viewportState,
       }),
     }
   )

@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Trash2, Clock, FileText, Layers } from 'lucide-react';
+import { Plus, Trash2, Clock, FileText, Layers, Download } from 'lucide-react';
 import { PageLayout } from '../components/PageLayout';
-import { fetchProjects, deleteProject } from '../api';
+import { fetchProjects, deleteProject, exportProject } from '../api';
 import { useAppStore } from '../store/useAppStore';
 import type { ProjectSummary } from '../types';
 
@@ -50,6 +50,15 @@ export function HomePage() {
       await loadProjects();
     } catch (err) {
       alert('Failed to delete project');
+    }
+  };
+
+  const handleExportProject = async (project: ProjectSummary, format: 'json' | 'markdown', e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await exportProject(project.filename, format);
+    } catch (err) {
+      alert(`Failed to export project: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
   };
 
@@ -135,13 +144,41 @@ export function HomePage() {
                     <h3 className="font-bold text-neutral-800 truncate flex-1 text-lg">
                       {project.name}
                     </h3>
-                    <button
-                      onClick={(e) => handleDeleteProject(project, e)}
-                      className="p-1.5 text-neutral-400 hover:text-red-600 hover:bg-red-50 rounded-none opacity-0 group-hover:opacity-100 transition-opacity"
-                      title="Delete project"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {/* Export dropdown */}
+                      <div className="relative group/export">
+                        <button
+                          onClick={(e) => e.stopPropagation()}
+                          className="p-1.5 text-neutral-400 hover:text-blue-900 hover:bg-blue-50 rounded-none"
+                          title="Export project"
+                        >
+                          <Download className="w-4 h-4" />
+                        </button>
+                        <div className="absolute right-0 top-full mt-1 bg-white border border-neutral-200 shadow-lg rounded-none hidden group-hover/export:block z-10 min-w-[140px]">
+                          <button
+                            onClick={(e) => handleExportProject(project, 'markdown', e)}
+                            className="w-full px-3 py-2 text-left text-sm text-neutral-700 hover:bg-blue-50 flex items-center gap-2"
+                          >
+                            <FileText className="w-4 h-4" />
+                            Markdown
+                          </button>
+                          <button
+                            onClick={(e) => handleExportProject(project, 'json', e)}
+                            className="w-full px-3 py-2 text-left text-sm text-neutral-700 hover:bg-blue-50 flex items-center gap-2"
+                          >
+                            <Layers className="w-4 h-4" />
+                            JSON (full)
+                          </button>
+                        </div>
+                      </div>
+                      <button
+                        onClick={(e) => handleDeleteProject(project, e)}
+                        className="p-1.5 text-neutral-400 hover:text-red-600 hover:bg-red-50 rounded-none"
+                        title="Delete project"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
 
                   <div className="space-y-2 text-sm text-neutral-600 mb-4">

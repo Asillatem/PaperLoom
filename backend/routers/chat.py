@@ -620,3 +620,70 @@ async def delete_session(session_id: int):
         session.commit()
 
         return {"status": "deleted"}
+
+
+@router.post("/sessions/{session_id}/summary")
+async def generate_summary(session_id: int):
+    """
+    Generate a summary of a chat session using the LLM.
+    Returns a concise summary of the conversation's key points.
+    """
+    settings = load_ai_settings()
+
+    # Get session and messages
+    with Session(engine) as session:
+        chat_session = session.get(ChatSession, session_id)
+        if not chat_session:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        stmt = (
+            select(ChatMessage)
+            .where(ChatMessage.session_id == session_id)
+            .order_by(ChatMessage.created_at)
+        )
+        messages = session.exec(stmt).all()
+
+        if len(messages) < 2:
+            return {
+                "summary": "This conversation is too short to summarize.",
+                "message_count": len(messages),
+            }
+
+    # Format messages for summarization
+    conversation_text = []
+    for msg in messages:
+        role = "User" if msg.role == "user" else "AI"
+        # Truncate very long messages
+        content = msg.content[:500] + "..." if len(msg.content) > 500 else msg.content
+        conversation_text.append(f"{role}: {content}")
+
+    full_conversation = "\n\n".join(conversation_text)
+
+    # Build summarization prompt
+    summary_prompt = f"""Summarize this research conversation in 2-3 concise bullet points. Focus on:
+- The main questions or topics discussed
+- Key insights or conclusions reached
+- Any important sources or citations mentioned
+
+Conversation:
+{full_conversation}
+
+Summary (use bullet points):"""
+
+    # Call LLM
+    try:
+        llm = create_llm(settings)
+        summary = ""
+        async for token in llm.stream([
+            {"role": "system", "content": "You are a concise summarizer. Provide clear, brief summaries."},
+            {"role": "user", "content": summary_prompt}
+        ]):
+            summary += token
+
+        return {
+            "summary": summary.strip(),
+            "message_count": len(messages),
+            "session_id": session_id,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Summary generation failed: {str(e)}")

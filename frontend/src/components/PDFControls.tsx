@@ -5,6 +5,8 @@ import {
   ZoomOut,
   Maximize,
   Globe,
+  Focus,
+  Minimize2,
 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 
@@ -13,6 +15,8 @@ export function PDFControls() {
   const selectedFile = useAppStore((state) => state.selectedPdf);
   const setPdfPage = useAppStore((state) => state.setPdfPage);
   const setPdfScale = useAppStore((state) => state.setPdfScale);
+  const focusMode = useAppStore((state) => state.focusMode);
+  const toggleFocusMode = useAppStore((state) => state.toggleFocusMode);
 
   const { currentPage, numPages, scale } = pdfViewerState;
   const isPdf = selectedFile?.type === 'pdf';
@@ -92,48 +96,66 @@ export function PDFControls() {
         )}
       </div>
 
-      {/* Zoom Controls - only for PDF */}
-      {isPdf && (
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleZoomOut}
-            className="p-1.5 rounded-none hover:bg-neutral-100 transition-colors"
-            title="Zoom out"
-          >
-            <ZoomOut className="w-5 h-5 text-neutral-700" />
-          </button>
+      {/* Right side controls */}
+      <div className="flex items-center gap-2">
+        {/* Zoom Controls - only for PDF */}
+        {isPdf && (
+          <>
+            <button
+              onClick={handleZoomOut}
+              className="p-1.5 rounded-none hover:bg-neutral-100 transition-colors"
+              title="Zoom out"
+            >
+              <ZoomOut className="w-5 h-5 text-neutral-700" />
+            </button>
 
-          <span className="text-sm font-mono text-neutral-700 min-w-[60px] text-center">
-            {Math.round(scale * 100)}%
-          </span>
+            <span className="text-sm font-mono text-neutral-700 min-w-[60px] text-center">
+              {Math.round(scale * 100)}%
+            </span>
 
-          <button
-            onClick={handleZoomIn}
-            className="p-1.5 rounded-none hover:bg-neutral-100 transition-colors"
-            title="Zoom in"
-          >
-            <ZoomIn className="w-5 h-5 text-neutral-700" />
-          </button>
+            <button
+              onClick={handleZoomIn}
+              className="p-1.5 rounded-none hover:bg-neutral-100 transition-colors"
+              title="Zoom in"
+            >
+              <ZoomIn className="w-5 h-5 text-neutral-700" />
+            </button>
 
-          <div className="h-4 w-px bg-neutral-300 mx-1" />
+            <div className="h-4 w-px bg-neutral-300 mx-1" />
 
-          <button
-            onClick={handleFitWidth}
-            className="px-2 py-1 text-xs font-medium rounded-none hover:bg-neutral-100 transition-colors text-neutral-700"
-            title="Fit width (100%)"
-          >
-            Fit Width
-          </button>
+            <button
+              onClick={handleFitWidth}
+              className="px-2 py-1 text-xs font-medium rounded-none hover:bg-neutral-100 transition-colors text-neutral-700"
+              title="Fit width (100%)"
+            >
+              Fit Width
+            </button>
 
-          <button
-            onClick={handleFitPage}
-            className="p-1.5 rounded-none hover:bg-neutral-100 transition-colors"
-            title="Fit page (80%)"
-          >
-            <Maximize className="w-5 h-5 text-neutral-700" />
-          </button>
-        </div>
-      )}
+            <button
+              onClick={handleFitPage}
+              className="p-1.5 rounded-none hover:bg-neutral-100 transition-colors"
+              title="Fit page (80%)"
+            >
+              <Maximize className="w-5 h-5 text-neutral-700" />
+            </button>
+
+            <div className="h-4 w-px bg-neutral-300 mx-1" />
+          </>
+        )}
+
+        {/* Focus Mode Toggle */}
+        <button
+          onClick={toggleFocusMode}
+          className={`p-1.5 rounded-none transition-colors ${
+            focusMode
+              ? 'bg-blue-900 text-white hover:bg-blue-800'
+              : 'hover:bg-neutral-100 text-neutral-700'
+          }`}
+          title={focusMode ? 'Exit Focus Mode (F)' : 'Enter Focus Mode (F)'}
+        >
+          {focusMode ? <Minimize2 className="w-5 h-5" /> : <Focus className="w-5 h-5" />}
+        </button>
+      </div>
     </div>
   );
 }

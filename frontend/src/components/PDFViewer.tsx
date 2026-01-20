@@ -14,7 +14,7 @@ import {
   normalizeRects,
 } from '../utils/highlightUtils';
 import { domRectToPdfRect } from '../utils/coordinates';
-import type { SnippetNode } from '../types';
+import type { StagedItem } from '../types';
 
 // Configure PDF.js worker
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
@@ -23,10 +23,8 @@ export function PDFViewer() {
   const containerRef = useRef<HTMLDivElement>(null);
   const selectedPdf = useAppStore((state) => state.selectedPdf);
   const pdfViewerState = useAppStore((state) => state.pdfViewerState);
-  const nodes = useAppStore((state) => state.nodes);
   const setPdfNumPages = useAppStore((state) => state.setPdfNumPages);
-  const addNode = useAppStore((state) => state.addNode);
-  const addHighlight = useAppStore((state) => state.addHighlight);
+  const addToStaging = useAppStore((state) => state.addToStaging);
 
   const { currentPage, scale } = pdfViewerState;
   const pdfUrl = selectedPdf ? getPdfUrl(selectedPdf.path) : null;
@@ -96,42 +94,26 @@ export function PDFViewer() {
     // Convert bounding box to PDF coordinates
     const pdfRect = domRectToPdfRect(boundingBox, pageHeight, 1.0);
 
-    // Create the snippet node
-    const nodeId = `node-${Date.now()}`;
-    const newNode: SnippetNode = {
-      id: nodeId,
-      type: 'snippetNode',
-      data: {
-        label: text,
-        sourcePdf: selectedPdf?.path || '',
-        sourceName: selectedPdf?.name || 'Unknown',
-        sourceType: 'pdf',
-        location: {
-          pageIndex: currentPage - 1,
-          rect: pdfRect,
-          highlightRects: normalizedRects,
-        },
-        comments: [],
+    // Create staged item (goes to inbox first)
+    const stagedItem: StagedItem = {
+      id: `staged-${Date.now()}`,
+      text,
+      sourcePdf: selectedPdf?.path || '',
+      sourceName: selectedPdf?.name || 'Unknown',
+      sourceType: 'pdf',
+      location: {
+        pageIndex: currentPage - 1,
+        rect: pdfRect,
+        highlightRects: normalizedRects,
       },
-      position: {
-        x: 100 + (nodes.length * 30) % 400,
-        y: 100 + (nodes.length * 30) % 400,
-      },
+      capturedAt: Date.now(),
     };
 
-    addNode(newNode);
-
-    // Also add to highlights for rendering (include pdfPath)
-    addHighlight({
-      id: nodeId,
-      pdfPath: selectedPdf?.path || '',
-      pageIndex: currentPage - 1,
-      rects: normalizedRects,
-    });
+    addToStaging(stagedItem);
 
     // Clear the selection
     selection.removeAllRanges();
-  }, [selectedPdf, currentPage, scale, nodes.length, addNode, addHighlight]);
+  }, [selectedPdf, currentPage, scale, addToStaging]);
 
   // Listen for mouseup to handle text selection
   useEffect(() => {
