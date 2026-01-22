@@ -4,13 +4,16 @@ backend/*.db
 __pycache__/
 .env
 devcontainer/
-nul
 node_modules/
 
-# Internal configuration and specs
+# Internal/local files
 .claude/
-.github/Spec_LS.md
-.github/Spec_LS_v2.MD
+.github/
+CLAUDE.md
+pyproject.toml
+nul
+=0.27.0
+=1.40.0
 
 # AI Brain secrets and cache
 backend/secrets.json
