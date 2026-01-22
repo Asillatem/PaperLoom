@@ -3,6 +3,7 @@ import { pdfjs } from 'react-pdf';
 import { useAppStore } from '../store/useAppStore';
 import { domRectToPdfRect } from '../utils/coordinates';
 import { extractTextFromRect } from '../utils/textExtraction';
+import { getPdfUrl } from '../api';
 import type { SnippetNode } from '../types';
 
 /**
@@ -47,7 +48,7 @@ export function SelectionLayer() {
     if (!selectedPdf || pdfDoc) return;
 
     try {
-      const url = `http://localhost:8000/pdf/${encodeURIComponent(selectedPdf.path)}`;
+      const url = getPdfUrl(selectedPdf.path);
       const loadingTask = pdfjs.getDocument(url);
       const doc = await loadingTask.promise;
       setPdfDoc(doc);

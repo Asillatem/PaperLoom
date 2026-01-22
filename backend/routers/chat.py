@@ -94,18 +94,27 @@ async def chat(req: ChatRequest):
     graph_depth = settings.get("graph_depth", 1)
     context_mode = req.context_mode or "auto"
 
-    # Sync nodes to vector store if provided
+    # Sync nodes to vector store if provided (both snippets and notes)
     if req.nodes:
-        node_data = [
-            {
-                "id": n.get("id", ""),
-                "content": n.get("data", {}).get("label", ""),
-                "source_document": n.get("data", {}).get("sourcePdf", ""),
-                "page_index": n.get("data", {}).get("location", {}).get("pageIndex", 0),
-            }
-            for n in req.nodes
-            if n.get("type") == "snippetNode"  # Only index snippet nodes, not notes
-        ]
+        node_data = []
+        for n in req.nodes:
+            node_type = n.get("type")
+            if node_type == "snippetNode":
+                node_data.append({
+                    "id": n.get("id", ""),
+                    "content": n.get("data", {}).get("label", ""),
+                    "source_document": n.get("data", {}).get("sourcePdf", ""),
+                    "page_index": n.get("data", {}).get("location", {}).get("pageIndex", 0),
+                    "node_type": "snippet",
+                })
+            elif node_type == "noteNode":
+                node_data.append({
+                    "id": n.get("id", ""),
+                    "content": n.get("data", {}).get("label", ""),
+                    "source_document": "",  # Notes have no source
+                    "page_index": 0,
+                    "node_type": "note",
+                })
         sync_project_nodes(req.project_id, node_data)
 
     # Build node lookup for context building
@@ -187,9 +196,16 @@ async def chat(req: ChatRequest):
         if node and node.get("data"):
             data = node["data"]
             label = data.get("label", "")
-            source = data.get("sourceName", data.get("sourcePdf", "Unknown"))
+            node_type = node.get("type", "snippetNode")
+
             if label:
-                context_parts.append(f"[{i}] From \"{source}\":\n{label}")
+                if node_type == "noteNode":
+                    # Format notes differently - they're user annotations
+                    context_parts.append(f"[{i}] User's note:\n{label}")
+                else:
+                    # Snippets have document sources
+                    source = data.get("sourceName", data.get("sourcePdf", "Unknown"))
+                    context_parts.append(f"[{i}] From \"{source}\":\n{label}")
                 total_context_chars += len(label)
 
                 # Build node insight
@@ -327,18 +343,27 @@ async def chat_stream(req: ChatRequest):
     graph_depth = settings.get("graph_depth", 1)
     context_mode = req.context_mode or "auto"
 
-    # Sync nodes to vector store if provided
+    # Sync nodes to vector store if provided (both snippets and notes)
     if req.nodes:
-        node_data = [
-            {
-                "id": n.get("id", ""),
-                "content": n.get("data", {}).get("label", ""),
-                "source_document": n.get("data", {}).get("sourcePdf", ""),
-                "page_index": n.get("data", {}).get("location", {}).get("pageIndex", 0),
-            }
-            for n in req.nodes
-            if n.get("type") == "snippetNode"
-        ]
+        node_data = []
+        for n in req.nodes:
+            node_type = n.get("type")
+            if node_type == "snippetNode":
+                node_data.append({
+                    "id": n.get("id", ""),
+                    "content": n.get("data", {}).get("label", ""),
+                    "source_document": n.get("data", {}).get("sourcePdf", ""),
+                    "page_index": n.get("data", {}).get("location", {}).get("pageIndex", 0),
+                    "node_type": "snippet",
+                })
+            elif node_type == "noteNode":
+                node_data.append({
+                    "id": n.get("id", ""),
+                    "content": n.get("data", {}).get("label", ""),
+                    "source_document": "",  # Notes have no source
+                    "page_index": 0,
+                    "node_type": "note",
+                })
         sync_project_nodes(req.project_id, node_data)
 
     # Build node lookup
@@ -413,9 +438,16 @@ async def chat_stream(req: ChatRequest):
         if node and node.get("data"):
             data = node["data"]
             label = data.get("label", "")
-            source = data.get("sourceName", data.get("sourcePdf", "Unknown"))
+            node_type = node.get("type", "snippetNode")
+
             if label:
-                context_parts.append(f"[{i}] From \"{source}\":\n{label}")
+                if node_type == "noteNode":
+                    # Format notes differently - they're user annotations
+                    context_parts.append(f"[{i}] User's note:\n{label}")
+                else:
+                    # Snippets have document sources
+                    source = data.get("sourceName", data.get("sourcePdf", "Unknown"))
+                    context_parts.append(f"[{i}] From \"{source}\":\n{label}")
                 total_context_chars += len(label)
                 node_details.append(NodeInsight(
                     nodeId=node_id,
@@ -687,3 +719,109 @@ Summary (use bullet points):"""
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Summary generation failed: {str(e)}")
+
+
+class SynthesizeRequest(BaseModel):
+    """Request body for synthesize endpoint."""
+    node_ids: list[str]
+    nodes: list[dict]
+    mode: str = "summary"  # "summary", "compare", "narrative"
+
+
+class SynthesizeResponse(BaseModel):
+    """Response from synthesize endpoint."""
+    synthesis: str
+    input_node_count: int
+    mode: str
+
+
+SYNTHESIS_PROMPTS = {
+    "summary": """Synthesize the following excerpts into a concise summary that captures the key points and main ideas.
+Be clear and direct. Use 2-4 sentences.
+
+Excerpts:
+{content}
+
+Summary:""",
+
+    "compare": """Compare and contrast the following excerpts. Identify:
+- Common themes or agreements
+- Key differences or contradictions
+- Complementary perspectives
+
+Excerpts:
+{content}
+
+Comparison:""",
+
+    "narrative": """Weave the following excerpts into a coherent narrative paragraph that flows naturally.
+Connect the ideas logically and create a unified story from these pieces.
+
+Excerpts:
+{content}
+
+Narrative:""",
+}
+
+
+@router.post("/synthesize", response_model=SynthesizeResponse)
+async def synthesize_nodes(req: SynthesizeRequest):
+    """
+    Synthesize multiple canvas nodes into a single summary/comparison/narrative.
+
+    Modes:
+    - summary: Concise summary of key points
+    - compare: Compare and contrast the excerpts
+    - narrative: Weave into a coherent narrative
+    """
+    settings = load_ai_settings()
+
+    if len(req.node_ids) < 2:
+        raise HTTPException(status_code=400, detail="At least 2 nodes required for synthesis")
+
+    # Build node lookup
+    node_lookup = {n.get("id", ""): n for n in req.nodes}
+
+    # Collect content from selected nodes
+    content_parts = []
+    for i, node_id in enumerate(req.node_ids, 1):
+        node = node_lookup.get(node_id)
+        if node and node.get("data"):
+            data = node["data"]
+            label = data.get("label", "")
+            node_type = node.get("type", "snippetNode")
+
+            if label:
+                if node_type == "noteNode":
+                    content_parts.append(f"[{i}] (Note): {label}")
+                else:
+                    source = data.get("sourceName", data.get("sourcePdf", "Unknown"))
+                    content_parts.append(f"[{i}] From \"{source}\": {label}")
+
+    if not content_parts:
+        raise HTTPException(status_code=400, detail="No content found in selected nodes")
+
+    content_text = "\n\n".join(content_parts)
+
+    # Get the appropriate prompt template
+    mode = req.mode if req.mode in SYNTHESIS_PROMPTS else "summary"
+    prompt_template = SYNTHESIS_PROMPTS[mode]
+    prompt = prompt_template.format(content=content_text)
+
+    # Call LLM
+    try:
+        llm = create_llm(settings)
+        synthesis = ""
+        async for token in llm.stream([
+            {"role": "system", "content": "You are a skilled research assistant that synthesizes information clearly and concisely."},
+            {"role": "user", "content": prompt}
+        ]):
+            synthesis += token
+
+        return SynthesizeResponse(
+            synthesis=synthesis.strip(),
+            input_node_count=len(content_parts),
+            mode=mode,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Synthesis failed: {str(e)}")

@@ -15,6 +15,8 @@ import {
   BarChart3,
   Search,
   Network,
+  StickyNote,
+  FileText,
 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import {
@@ -85,9 +87,9 @@ export function ChatSidebar() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  // Get snippet nodes only (not notes)
-  const snippetNodes = useMemo(() => {
-    return nodes.filter((n) => n.type === 'snippetNode');
+  // Get all pinnable nodes (snippets and notes)
+  const pinnableNodes = useMemo(() => {
+    return nodes.filter((n) => n.type === 'snippetNode' || n.type === 'noteNode');
   }, [nodes]);
 
   // Scroll to bottom when messages change
@@ -525,8 +527,8 @@ export function ChatSidebar() {
               <span className="flex items-center gap-1">
                 <Pin className="w-3 h-3" />
                 {pinnedNodeIds.length === 0
-                  ? 'Select snippets to include...'
-                  : `${pinnedNodeIds.length} snippet${pinnedNodeIds.length !== 1 ? 's' : ''} pinned`}
+                  ? 'Select nodes to include...'
+                  : `${pinnedNodeIds.length} node${pinnedNodeIds.length !== 1 ? 's' : ''} pinned`}
               </span>
               {showNodeSelector ? (
                 <ChevronUp className="w-3 h-3" />
@@ -537,41 +539,64 @@ export function ChatSidebar() {
 
             {showNodeSelector && (
               <div className="mt-1 max-h-40 overflow-y-auto bg-white border border-neutral-200 rounded">
-                {snippetNodes.length === 0 ? (
+                {pinnableNodes.length === 0 ? (
                   <div className="p-2 text-xs text-neutral-500 text-center">
-                    No snippets on canvas
+                    No snippets or notes on canvas
                   </div>
                 ) : (
-                  snippetNodes.map((node) => (
-                    <button
-                      key={node.id}
-                      onClick={() => togglePinnedNode(node.id)}
-                      className={`w-full flex items-start gap-2 p-2 text-left text-xs hover:bg-neutral-50 border-b border-neutral-100 last:border-b-0 ${
-                        pinnedNodeIds.includes(node.id) ? 'bg-yellow-50' : ''
-                      }`}
-                    >
-                      <div
-                        className={`mt-0.5 w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${
-                          pinnedNodeIds.includes(node.id)
-                            ? 'bg-yellow-400 border-yellow-500'
-                            : 'border-neutral-300'
+                  pinnableNodes.map((node) => {
+                    const isNote = node.type === 'noteNode';
+                    const noteColor = isNote ? (node.data as { color?: string }).color : null;
+                    return (
+                      <button
+                        key={node.id}
+                        onClick={() => togglePinnedNode(node.id)}
+                        className={`w-full flex items-start gap-2 p-2 text-left text-xs hover:bg-neutral-50 border-b border-neutral-100 last:border-b-0 ${
+                          pinnedNodeIds.includes(node.id) ? 'bg-yellow-50' : ''
                         }`}
                       >
-                        {pinnedNodeIds.includes(node.id) && (
-                          <Pin className="w-2.5 h-2.5 text-yellow-800" />
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="truncate text-neutral-700">
-                          {node.data.label.slice(0, 60)}
-                          {node.data.label.length > 60 ? '...' : ''}
+                        <div
+                          className={`mt-0.5 w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${
+                            pinnedNodeIds.includes(node.id)
+                              ? 'bg-yellow-400 border-yellow-500'
+                              : 'border-neutral-300'
+                          }`}
+                        >
+                          {pinnedNodeIds.includes(node.id) && (
+                            <Pin className="w-2.5 h-2.5 text-yellow-800" />
+                          )}
                         </div>
-                        <div className="text-neutral-400 truncate">
-                          {node.data.sourceName || node.data.sourcePdf.split(/[/\\]/).pop()}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1">
+                            {isNote ? (
+                              <StickyNote className={`w-3 h-3 flex-shrink-0 ${
+                                noteColor === 'yellow' ? 'text-yellow-600' :
+                                noteColor === 'blue' ? 'text-blue-600' :
+                                noteColor === 'green' ? 'text-green-600' :
+                                noteColor === 'pink' ? 'text-pink-600' :
+                                noteColor === 'purple' ? 'text-purple-600' :
+                                'text-yellow-600'
+                              }`} />
+                            ) : (
+                              <FileText className="w-3 h-3 flex-shrink-0 text-neutral-400" />
+                            )}
+                            <span className="truncate text-neutral-700">
+                              {node.data.label.slice(0, 55)}
+                              {node.data.label.length > 55 ? '...' : ''}
+                            </span>
+                          </div>
+                          <div className="text-neutral-400 truncate pl-4">
+                            {isNote ? (
+                              <span className="italic">Note</span>
+                            ) : (
+                              (node.data as { sourceName?: string; sourcePdf?: string }).sourceName ||
+                              (node.data as { sourcePdf?: string }).sourcePdf?.split(/[/\\]/).pop()
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    </button>
-                  ))
+                      </button>
+                    );
+                  })
                 )}
               </div>
             )}
@@ -685,9 +710,9 @@ export function ChatSidebar() {
             <Brain className="w-10 h-10 mx-auto mb-3 text-neutral-300" />
             <p className="text-sm">Ask questions about your research.</p>
             <p className="text-xs mt-2 text-neutral-400">
-              {contextMode === 'auto' && 'I\'ll find relevant snippets automatically.'}
-              {contextMode === 'manual' && 'Pin snippets above to include them.'}
-              {contextMode === 'hybrid' && 'I\'ll search + use your pinned snippets.'}
+              {contextMode === 'auto' && 'I\'ll find relevant snippets and notes automatically.'}
+              {contextMode === 'manual' && 'Pin snippets or notes above to include them.'}
+              {contextMode === 'hybrid' && 'I\'ll search + use your pinned nodes.'}
             </p>
           </div>
         )}

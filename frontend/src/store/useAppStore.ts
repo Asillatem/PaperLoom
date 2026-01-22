@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { saveProject as apiSaveProject } from '../api';
 import type {
   FileEntry,
   PDFViewerState,
@@ -838,19 +839,7 @@ export const useAppStore = create<AppStore>()(
         };
 
         try {
-          const response = await fetch('http://localhost:8000/save', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              project: projectData,
-              filename: state.projectMetadata.name,
-            }),
-          });
-
-          if (!response.ok) {
-            throw new Error(`Save failed: ${response.status}`);
-          }
-
+          await apiSaveProject(projectData, state.projectMetadata.name);
           set({ isDirty: false });
         } catch (error) {
           console.error('Save failed:', error);
@@ -987,7 +976,7 @@ export const useAppStore = create<AppStore>()(
       },
     }),
     {
-      name: 'liquid-science-storage',
+      name: 'paperloom-storage',
       partialize: (state) => ({
         // Only persist certain state
         nodes: state.nodes,

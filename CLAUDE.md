@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Liquid Science** is a full-stack web application for PDF and HTML document annotation with a spatial canvas-based relationship mapping system. It integrates with Zotero's local document storage for managing academic papers and research documents. Users can extract text snippets from documents, place them on an infinite canvas, create relationships between them via edges, and add comments.
+**PaperLoom** is a full-stack web application for PDF and HTML document annotation with a spatial canvas-based relationship mapping system. It integrates with Zotero's local document storage for managing academic papers and research documents. Users can extract text snippets from documents, place them on an infinite canvas, create relationships between them via edges, and add comments.
 
 ## Tech Stack
 
@@ -143,7 +143,7 @@ Zustand store (`useAppStore.ts`) manages:
 - **Highlights**: persistent highlights tied to nodes by matching IDs
 - **Project metadata**: name, timestamps, active PDF
 
-**Persistence**: Uses `zustand/middleware/persist` with `partialize` to selectively persist to localStorage (key: `liquid-science-storage`). Page position and temporary highlights are NOT persisted.
+**Persistence**: Uses `zustand/middleware/persist` with `partialize` to selectively persist to localStorage (key: `paperloom-storage`). Page position and temporary highlights are NOT persisted.
 
 **Cascade deletion**: When `removeNode()` is called, associated edges and highlights are also removed.
 

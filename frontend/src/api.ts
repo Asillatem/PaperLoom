@@ -3,7 +3,8 @@ import type { ProjectData, FileEntry, ProjectSummary, AISettings } from './types
 // Re-export types for backward compatibility
 export type { FileEntry, ProjectSummary, AISettings };
 
-const API_BASE = 'http://localhost:8000';
+// API base URL from environment variable with localhost fallback
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
 export async function fetchFiles(): Promise<FileEntry[]> {
   const resp = await fetch(`${API_BASE}/files`)
@@ -447,6 +448,48 @@ export async function generateChatSummary(sessionId: number): Promise<ChatSummar
   if (!resp.ok) {
     const error = await resp.json().catch(() => ({}));
     throw new Error(error.detail || `Failed to generate summary: ${resp.status}`);
+  }
+  return resp.json();
+}
+
+// ============================================================================
+// Synthesis API
+// ============================================================================
+
+export type SynthesisMode = 'summary' | 'compare' | 'narrative';
+
+export interface SynthesizeRequest {
+  node_ids: string[];
+  nodes: unknown[];
+  mode: SynthesisMode;
+}
+
+export interface SynthesizeResponse {
+  synthesis: string;
+  input_node_count: number;
+  mode: string;
+}
+
+/**
+ * Synthesize multiple nodes into a single summary/comparison/narrative
+ */
+export async function synthesizeNodes(
+  nodeIds: string[],
+  nodes: unknown[],
+  mode: SynthesisMode = 'summary'
+): Promise<SynthesizeResponse> {
+  const resp = await fetch(`${API_BASE}/chat/synthesize`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      node_ids: nodeIds,
+      nodes,
+      mode,
+    } as SynthesizeRequest),
+  });
+  if (!resp.ok) {
+    const error = await resp.json().catch(() => ({}));
+    throw new Error(error.detail || `Synthesis failed: ${resp.status}`);
   }
   return resp.json();
 }

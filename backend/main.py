@@ -24,12 +24,16 @@ from fastapi.responses import PlainTextResponse
 # Configuration from environment variables with sensible defaults
 PROJECTS_DIR = Path(os.environ.get("PROJECTS_DIR", str(Path.cwd() / "projects")))
 
-app = FastAPI(title="Liquid Science API")
+# CORS origins from environment (comma-separated) or default dev ports
+DEFAULT_CORS_ORIGINS = "http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173,http://127.0.0.1:3000"
+CORS_ORIGINS = [origin.strip() for origin in os.environ.get("CORS_ORIGINS", DEFAULT_CORS_ORIGINS).split(",") if origin.strip()]
 
-# Dev CORS - restrict to common dev ports
+app = FastAPI(title="PaperLoom API")
+
+# CORS configuration
 app.add_middleware(
 	CORSMiddleware,
-	allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:5174", "http://localhost:5175", "http://localhost:5176", "http://localhost:5177", "http://localhost:5178"],
+	allow_origins=CORS_ORIGINS,
 	allow_credentials=True,
 	allow_methods=["*"],
 	allow_headers=["*"],
@@ -483,7 +487,7 @@ def _generate_markdown_export(project_data: dict, chat_sessions: list) -> PlainT
 
 	# Footer
 	lines.append("---")
-	lines.append(f"*Exported from Liquid Science on {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}*")
+	lines.append(f"*Exported from PaperLoom on {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}*")
 
 	markdown_content = "\n".join(lines)
 

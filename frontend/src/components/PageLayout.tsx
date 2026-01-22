@@ -22,7 +22,7 @@ export function PageLayout({ children, title, showNav = true }: PageLayoutProps)
         <nav className="h-14 bg-blue-900 shadow-md flex items-center px-6 gap-8">
           <Link to="/" className="flex items-center gap-2 font-bold text-white">
             <FolderOpen className="w-5 h-5" />
-            <span className="tracking-tight">LIQUID SCIENCE</span>
+            <span className="tracking-tight">PAPERLOOM</span>
           </Link>
 
           <div className="flex-1" />

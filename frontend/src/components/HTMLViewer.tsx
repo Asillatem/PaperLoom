@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { getHtmlUrl } from '../api';
+import { HTMLRegionSelectionLayer } from './HTMLRegionSelectionLayer';
 import type { StagedItem } from '../types';
 
 // Script to inject into HTML for selection handling and highlights
@@ -140,6 +141,7 @@ export function HTMLViewer() {
   const highlights = useAppStore((state) => state.highlights);
   const highlightedRect = useAppStore((state) => state.pdfViewerState.highlightedRect);
   const addToStaging = useAppStore((state) => state.addToStaging);
+  const regionSelectMode = useAppStore((state) => state.regionSelectMode);
 
   // Fetch HTML content and inject selection script
   useEffect(() => {
@@ -311,10 +313,14 @@ export function HTMLViewer() {
         sandbox="allow-same-origin allow-scripts allow-popups"
         title="HTML Snapshot"
       />
+      {/* Region Selection Layer */}
+      <HTMLRegionSelectionLayer iframeRef={iframeRef} />
       {/* Selection hint */}
-      <div className="absolute bottom-4 right-4 bg-green-100 text-green-700 text-xs font-medium px-3 py-1.5 rounded-none shadow-sm pointer-events-none opacity-75">
-        Select text to create snippets
-      </div>
+      {!regionSelectMode && (
+        <div className="absolute bottom-4 right-4 bg-green-100 text-green-700 text-xs font-medium px-3 py-1.5 rounded-none shadow-sm pointer-events-none opacity-75">
+          Select text to create snippets
+        </div>
+      )}
     </div>
   );
 }

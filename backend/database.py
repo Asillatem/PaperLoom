@@ -1,7 +1,7 @@
 from sqlmodel import SQLModel, Session, create_engine
 import os
 
-DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///./liquid_science.db")
+DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///./paperloom.db")
 
 # SQLite needs check_same_thread=False for FastAPI
 connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
