@@ -1,7 +1,5 @@
 """Graph service for expanding node connections via edges."""
 
-from typing import Optional
-
 
 def get_connected_nodes(
     node_ids: list[str],
@@ -56,24 +54,3 @@ def get_connected_nodes(
             break
 
     return list(visited)[:max_nodes]
-
-
-def get_subgraph(
-    node_ids: list[str],
-    edges: list[dict],
-) -> list[dict]:
-    """
-    Get edges that connect any of the given nodes.
-
-    Args:
-        node_ids: Node IDs to find connections between
-        edges: All edges in the project
-
-    Returns:
-        List of edges where both source and target are in node_ids
-    """
-    node_set = set(node_ids)
-    return [
-        edge for edge in edges
-        if edge.get("source") in node_set and edge.get("target") in node_set
-    ]

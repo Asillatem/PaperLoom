@@ -201,12 +201,3 @@ def sync_project_nodes(project_id: str, nodes: list[dict]) -> int:
         collection.delete(ids=list(removed_ids))
 
     return updated_count
-
-
-def get_node_count(project_id: Optional[str] = None) -> int:
-    """Get the number of nodes in the vector store."""
-    collection = get_collection()
-    if project_id:
-        result = collection.get(where={"project_id": project_id}, include=[])
-        return len(result["ids"]) if result["ids"] else 0
-    return collection.count()

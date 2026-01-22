@@ -97,13 +97,3 @@ export async function extractTextFromRect(
     return '';
   }
 }
-
-/**
- * Simple fallback text extraction using DOM selection
- * This is less precise but works as a backup method
- * @returns Selected text from the DOM
- */
-export function extractTextFromDOMSelection(): string {
-  const selection = window.getSelection();
-  return selection ? selection.toString().trim() : '';
-}

@@ -2,7 +2,7 @@ from dotenv import load_dotenv
 load_dotenv()  # Load .env file before accessing env vars
 
 from fastapi import FastAPI, HTTPException, Depends
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlmodel import Session, select
@@ -18,7 +18,6 @@ from services.zotero import get_zotero_service
 from models import CachedZoteroItem, ChatSession, ChatMessage
 import models  # noqa: F401 - imported for SQLModel metadata
 from routers import settings, chat
-from fastapi.responses import PlainTextResponse
 
 
 # Configuration from environment variables with sensible defaults
