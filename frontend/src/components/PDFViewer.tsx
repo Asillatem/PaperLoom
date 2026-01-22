@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/Page/TextLayer.css';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
@@ -7,6 +7,7 @@ import { getPdfUrl } from '../api';
 import { SelectionLayer } from './SelectionLayer';
 import { HighlightOverlay } from './HighlightOverlay';
 import { PersistentHighlights } from './PersistentHighlights';
+import { RegionSelectionLayer } from './RegionSelectionLayer';
 import {
   clientRectsToPageRelative,
   calculateBoundingBox,
@@ -21,16 +22,21 @@ pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/b
 
 export function PDFViewer() {
   const containerRef = useRef<HTMLDivElement>(null);
+  const [pageContainer, setPageContainer] = useState<HTMLElement | null>(null);
   const selectedPdf = useAppStore((state) => state.selectedPdf);
   const pdfViewerState = useAppStore((state) => state.pdfViewerState);
   const setPdfNumPages = useAppStore((state) => state.setPdfNumPages);
   const addToStaging = useAppStore((state) => state.addToStaging);
+  const regionSelectMode = useAppStore((state) => state.regionSelectMode);
 
   const { currentPage, scale } = pdfViewerState;
   const pdfUrl = selectedPdf ? getPdfUrl(selectedPdf.path) : null;
 
-  // Handle native text selection
+  // Handle native text selection (disabled in region select mode)
   const handleTextSelection = useCallback(() => {
+    // Don't process text selection in region select mode
+    if (regionSelectMode) return;
+
     const selection = window.getSelection();
     if (!selection || selection.isCollapsed) return;
 
@@ -113,7 +119,7 @@ export function PDFViewer() {
 
     // Clear the selection
     selection.removeAllRanges();
-  }, [selectedPdf, currentPage, scale, addToStaging]);
+  }, [selectedPdf, currentPage, scale, addToStaging, regionSelectMode]);
 
   // Listen for mouseup to handle text selection
   useEffect(() => {
@@ -125,6 +131,25 @@ export function PDFViewer() {
       container.removeEventListener('mouseup', handleTextSelection);
     };
   }, [handleTextSelection]);
+
+  // Track the page container element for region selection
+  useEffect(() => {
+    const updatePageContainer = () => {
+      const container = containerRef.current?.querySelector('.react-pdf__Page') as HTMLElement | null;
+      setPageContainer(container);
+    };
+
+    // Initial check
+    updatePageContainer();
+
+    // Set up a mutation observer to detect when the page loads
+    const observer = new MutationObserver(updatePageContainer);
+    if (containerRef.current) {
+      observer.observe(containerRef.current, { childList: true, subtree: true });
+    }
+
+    return () => observer.disconnect();
+  }, [currentPage]);
 
   // Handle document load success
   const onDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
@@ -148,7 +173,12 @@ export function PDFViewer() {
   }
 
   return (
-    <div ref={containerRef} className="h-full w-full flex flex-col bg-neutral-100 overflow-hidden">
+    <div
+      ref={containerRef}
+      className={`h-full w-full flex flex-col bg-neutral-100 overflow-hidden ${
+        regionSelectMode ? 'select-none' : ''
+      }`}
+    >
       <div className="flex-1 overflow-auto min-h-0">
         <div className="flex justify-center p-4">
           <div className="relative inline-block">
@@ -186,7 +216,10 @@ export function PDFViewer() {
             <PersistentHighlights />
 
             {/* Selection overlay for bounding-box text extraction (fallback mode) */}
-            <SelectionLayer />
+            {!regionSelectMode && <SelectionLayer />}
+
+            {/* Region selection layer for capturing image regions */}
+            <RegionSelectionLayer pageContainer={pageContainer} currentPage={currentPage} />
 
             {/* Highlight overlay for bi-directional linking */}
             <HighlightOverlay />

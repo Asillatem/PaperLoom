@@ -11,8 +11,10 @@ import type {
   PersistentHighlight,
   CanvasNode,
   NoteNode,
+  ImageNode,
   ArrowDirection,
   StagedItem,
+  StagedImageItem,
   SnippetNode,
 } from '../types';
 import type { Connection, EdgeChange } from 'reactflow';
@@ -52,7 +54,9 @@ interface AppStore {
 
   // Staging State (Capture Inbox)
   stagedItems: StagedItem[];
+  stagedImages: StagedImageItem[];
   stagingExpanded: boolean;
+  regionSelectMode: boolean; // Toggle between text and region selection
 
   // Selection State
   selectionState: SelectionState;
@@ -77,6 +81,7 @@ interface AppStore {
   removeNode: (nodeId: string) => void;
   updateNodePosition: (nodeId: string, position: { x: number; y: number }) => void;
   updateNoteContent: (nodeId: string, content: string) => void;
+  updateNodeSelection: (nodeId: string, selected: boolean) => void;
 
   // Canvas Edge Actions
   addEdge: (edge: SnippetEdge) => void;
@@ -100,6 +105,14 @@ interface AppStore {
   moveToCanvas: (id: string, position?: { x: number; y: number }) => void;
   moveAllToCanvas: () => void;
   toggleStagingExpanded: () => void;
+
+  // Image Staging Actions
+  addImageToStaging: (item: StagedImageItem) => void;
+  removeImageFromStaging: (id: string) => void;
+  clearImageStaging: () => void;
+  moveImageToCanvas: (id: string, position?: { x: number; y: number }) => void;
+  toggleRegionSelectMode: () => void;
+  updateImageCaption: (nodeId: string, caption: string) => void;
 
   // Comment Actions
   addComment: (nodeId: string, text: string) => void;
@@ -176,7 +189,9 @@ export const useAppStore = create<AppStore>()(
 
       // Initial Staging State
       stagedItems: [],
+      stagedImages: [],
       stagingExpanded: true,
+      regionSelectMode: false,
 
       // Initial Selection State
       selectionState: {
@@ -350,6 +365,13 @@ export const useAppStore = create<AppStore>()(
             ...state.projectMetadata,
             modified: Date.now(),
           },
+        })),
+
+      updateNodeSelection: (nodeId, selected) =>
+        set((state) => ({
+          nodes: state.nodes.map((n) =>
+            n.id === nodeId ? { ...n, selected } : n
+          ),
         })),
 
       // Edge Actions
@@ -604,6 +626,75 @@ export const useAppStore = create<AppStore>()(
           stagingExpanded: !state.stagingExpanded,
         })),
 
+      // Image Staging Actions
+      addImageToStaging: (item) =>
+        set((state) => ({
+          stagedImages: [...state.stagedImages, item],
+        })),
+
+      removeImageFromStaging: (id) =>
+        set((state) => ({
+          stagedImages: state.stagedImages.filter((item) => item.id !== id),
+        })),
+
+      clearImageStaging: () =>
+        set({ stagedImages: [] }),
+
+      moveImageToCanvas: (id, position) => {
+        const state = get();
+        const item = state.stagedImages.find((i) => i.id === id);
+        if (!item) return;
+
+        // Calculate position: use provided position or stagger based on existing nodes
+        const finalPosition = position || {
+          x: 100 + state.nodes.length * 30,
+          y: 100 + state.nodes.length * 30,
+        };
+
+        // Create image node from staged item
+        const imageNode: ImageNode = {
+          id: `image-${Date.now()}`,
+          type: 'imageNode',
+          data: {
+            imageData: item.imageData,
+            sourcePdf: item.sourcePdf,
+            sourceName: item.sourceName,
+            pageIndex: item.pageIndex,
+            comments: [],
+          },
+          position: finalPosition,
+        };
+
+        set((state) => ({
+          nodes: [...state.nodes, imageNode],
+          stagedImages: state.stagedImages.filter((i) => i.id !== id),
+          isDirty: true,
+          projectMetadata: {
+            ...state.projectMetadata,
+            modified: Date.now(),
+          },
+        }));
+      },
+
+      toggleRegionSelectMode: () =>
+        set((state) => ({
+          regionSelectMode: !state.regionSelectMode,
+        })),
+
+      updateImageCaption: (nodeId, caption) =>
+        set((state) => ({
+          nodes: state.nodes.map((n) =>
+            n.id === nodeId && n.type === 'imageNode'
+              ? { ...n, data: { ...n.data, caption } }
+              : n
+          ) as CanvasNode[],
+          isDirty: true,
+          projectMetadata: {
+            ...state.projectMetadata,
+            modified: Date.now(),
+          },
+        })),
+
       // Comment Actions
       addComment: (nodeId, text) =>
         set((state) => ({
@@ -782,6 +873,8 @@ export const useAppStore = create<AppStore>()(
           edges: data.edges || [], // Handle old projects without edges
           selectedItemKeys: data.selectedItemKeys || [], // Handle old projects
           stagedItems: [], // Clear staging when loading a project
+          stagedImages: [], // Clear image staging when loading a project
+          regionSelectMode: false,
           pdfViewerState: {
             currentPage: data.pdfState.currentPage,
             scale: data.pdfState.scale,
@@ -797,6 +890,8 @@ export const useAppStore = create<AppStore>()(
           edges: [],
           highlights: [],
           stagedItems: [],
+          stagedImages: [],
+          regionSelectMode: false,
           selectedPdf: null,
           selectedItemKeys: [],
           currentProjectId: null,
@@ -899,6 +994,7 @@ export const useAppStore = create<AppStore>()(
         edges: state.edges,
         highlights: state.highlights,
         stagedItems: state.stagedItems,
+        stagedImages: state.stagedImages,
         stagingExpanded: state.stagingExpanded,
         projectMetadata: state.projectMetadata,
         currentProjectId: state.currentProjectId,

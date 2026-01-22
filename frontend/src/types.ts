@@ -65,7 +65,17 @@ export interface NoteNodeData {
   comments: Comment[]; // Node comments
 }
 
-// Staged item in capture inbox (before placing on canvas)
+// Image node data structure (for captured PDF regions)
+export interface ImageNodeData {
+  imageData: string; // Base64-encoded image data
+  sourcePdf: string; // Zotero attachment key or path
+  sourceName?: string; // Item title (for display)
+  pageIndex: number; // Page where the region was captured
+  caption?: string; // Optional user-provided caption
+  comments: Comment[]; // Node comments
+}
+
+// Staged text item in capture inbox (before placing on canvas)
 export interface StagedItem {
   id: string;
   text: string;
@@ -73,6 +83,16 @@ export interface StagedItem {
   sourceName: string; // Display name
   sourceType: 'pdf' | 'html';
   location: PDFLocation;
+  capturedAt: number; // Timestamp for ordering
+}
+
+// Staged image item in capture inbox (for region captures)
+export interface StagedImageItem {
+  id: string;
+  imageData: string; // Base64-encoded image
+  sourcePdf: string; // Zotero attachment key
+  sourceName: string; // Display name
+  pageIndex: number;
   capturedAt: number; // Timestamp for ordering
 }
 
@@ -85,6 +105,7 @@ export interface SnippetNode {
     x: number; // Canvas coordinates
     y: number;
   };
+  selected?: boolean; // Added by ReactFlow at runtime
 }
 
 // Note node for canvas
@@ -96,10 +117,23 @@ export interface NoteNode {
     x: number;
     y: number;
   };
+  selected?: boolean; // Added by ReactFlow at runtime
+}
+
+// Image node for canvas (captured PDF regions)
+export interface ImageNode {
+  id: string;
+  type: 'imageNode';
+  selected?: boolean; // Added by ReactFlow at runtime
+  data: ImageNodeData;
+  position: {
+    x: number;
+    y: number;
+  };
 }
 
 // Union type for all canvas nodes
-export type CanvasNode = SnippetNode | NoteNode;
+export type CanvasNode = SnippetNode | NoteNode | ImageNode;
 
 // PDF viewer state
 export interface PDFViewerState {

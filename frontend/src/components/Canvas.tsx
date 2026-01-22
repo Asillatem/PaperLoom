@@ -8,6 +8,7 @@ import ReactFlow, {
   MarkerType,
   useReactFlow,
   ReactFlowProvider,
+  SelectionMode,
 } from 'reactflow';
 import type { NodeTypes, OnNodesChange, OnEdgesChange, OnConnect, Edge, Viewport } from 'reactflow';
 import 'reactflow/dist/style.css';
@@ -15,10 +16,76 @@ import { toPng, toSvg } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 import { SnippetNodeComponent } from './SnippetNodeComponent';
 import { NoteNodeComponent } from './NoteNodeComponent';
+import { ImageNodeComponent } from './ImageNodeComponent';
 import { EdgeConfigPopover } from './EdgeConfigPopover';
 import { useAppStore } from '../store/useAppStore';
-import { StickyNote, Map, Download, Image, FileText, Loader2 } from 'lucide-react';
-import type { ArrowDirection } from '../types';
+import { StickyNote, Map, Download, Image, FileText, Loader2, Sparkles, X, LayoutGrid, ArrowDown, ArrowRight, Circle } from 'lucide-react';
+import type { ArrowDirection, CanvasNode, SnippetEdge } from '../types';
+import { synthesizeNodes, type SynthesisMode } from '../api';
+import Dagre from '@dagrejs/dagre';
+
+// Layout direction types
+type LayoutDirection = 'TB' | 'LR' | 'radial';
+
+// Apply dagre layout to nodes
+const getLayoutedElements = (
+  nodes: CanvasNode[],
+  edges: SnippetEdge[],
+  direction: LayoutDirection
+) => {
+  const g = new Dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}));
+
+  // Node dimensions (approximate)
+  const nodeWidth = 280;
+  const nodeHeight = 150;
+
+  // Configure graph based on direction
+  if (direction === 'radial') {
+    // For radial, we'll use TB and then transform
+    g.setGraph({ rankdir: 'TB', ranksep: 100, nodesep: 80 });
+  } else {
+    g.setGraph({ rankdir: direction, ranksep: 80, nodesep: 60 });
+  }
+
+  // Add nodes to graph
+  nodes.forEach((node) => {
+    g.setNode(node.id, { width: nodeWidth, height: nodeHeight });
+  });
+
+  // Add edges to graph
+  edges.forEach((edge) => {
+    g.setEdge(edge.source, edge.target);
+  });
+
+  // Run layout
+  Dagre.layout(g);
+
+  // Get new positions
+  const layoutedNodes = nodes.map((node) => {
+    const nodeWithPosition = g.node(node.id);
+    if (!nodeWithPosition) return node;
+
+    let x = nodeWithPosition.x - nodeWidth / 2;
+    let y = nodeWithPosition.y - nodeHeight / 2;
+
+    // For radial layout, transform coordinates
+    if (direction === 'radial') {
+      const centerX = 400;
+      const centerY = 400;
+      const angle = (nodeWithPosition.y / 200) * Math.PI * 2;
+      const radius = 150 + nodeWithPosition.x * 0.8;
+      x = centerX + Math.cos(angle) * radius - nodeWidth / 2;
+      y = centerY + Math.sin(angle) * radius - nodeHeight / 2;
+    }
+
+    return {
+      ...node,
+      position: { x, y },
+    };
+  });
+
+  return layoutedNodes;
+};
 
 // Helper to compute edge markers based on arrow direction
 const getEdgeMarkers = (direction: ArrowDirection = 'forward') => {
@@ -46,6 +113,7 @@ const getEdgeMarkers = (direction: ArrowDirection = 'forward') => {
 const nodeTypes: NodeTypes = {
   snippetNode: SnippetNodeComponent,
   noteNode: NoteNodeComponent,
+  imageNode: ImageNodeComponent,
 };
 
 function CanvasInner() {
@@ -58,6 +126,7 @@ function CanvasInner() {
   const storeOnConnect = useAppStore((state) => state.onConnect);
   const addNoteNode = useAppStore((state) => state.addNoteNode);
   const moveToCanvas = useAppStore((state) => state.moveToCanvas);
+  const moveImageToCanvas = useAppStore((state) => state.moveImageToCanvas);
 
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const { screenToFlowPosition } = useReactFlow();
@@ -78,6 +147,19 @@ function CanvasInner() {
   // Export state
   const [exporting, setExporting] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
+
+  // Synthesize state
+  const [showSynthesizeModal, setShowSynthesizeModal] = useState(false);
+  const [synthesizing, setSynthesizing] = useState(false);
+  const { getNodes, fitView } = useReactFlow();
+
+  // Layout state
+  const [showLayoutMenu, setShowLayoutMenu] = useState(false);
+
+  // Get selected nodes count
+  const selectedNodes = useMemo(() => {
+    return nodes.filter((n) => n.selected === true);
+  }, [nodes]);
 
   // Export canvas functions
   const exportCanvas = useCallback(async (format: 'png' | 'svg' | 'pdf') => {
@@ -164,6 +246,9 @@ function CanvasInner() {
     }));
   }, [edges]);
 
+  // Get store actions for selection
+  const updateNodeSelection = useAppStore((state) => state.updateNodeSelection);
+
   const onNodesChange: OnNodesChange = useCallback(
     (changes) => {
       // Apply changes to update node positions and track selection
@@ -171,12 +256,16 @@ function CanvasInner() {
         if (change.type === 'position' && change.position) {
           updateNodePosition(change.id, change.position);
         }
-        if (change.type === 'select' && change.selected) {
-          setSelectedNodeId(change.id);
+        if (change.type === 'select') {
+          // Update selection in store for multi-select support
+          updateNodeSelection(change.id, change.selected);
+          if (change.selected) {
+            setSelectedNodeId(change.id);
+          }
         }
       });
     },
-    [updateNodePosition]
+    [updateNodePosition, updateNodeSelection]
   );
 
   const onEdgesChange: OnEdgesChange = useCallback(
@@ -255,30 +344,94 @@ function CanvasInner() {
     }
   }, [screenToFlowPosition, addNoteNode]);
 
+  // Handle synthesize with mode
+  const handleSynthesize = useCallback(
+    async (mode: SynthesisMode) => {
+      if (selectedNodes.length < 2) return;
+
+      setSynthesizing(true);
+      setShowSynthesizeModal(false);
+
+      try {
+        const nodeIds = selectedNodes.map((n) => n.id);
+        const result = await synthesizeNodes(nodeIds, nodes, mode);
+
+        // Calculate position for new note (average X, below the lowest selected node)
+        const avgX = selectedNodes.reduce((sum, n) => sum + n.position.x, 0) / selectedNodes.length;
+        const maxY = Math.max(...selectedNodes.map((n) => n.position.y));
+
+        // Create new blue note with synthesis result
+        // Position it below the average, with some offset
+        addNoteNode({ x: avgX, y: maxY + 250 }, 'blue');
+
+        // Get the newly created note and update its content
+        // Note: addNoteNode creates a note with empty label, we need to update it
+        setTimeout(() => {
+          const allNodes = getNodes();
+          const newNote = allNodes.find((n) => n.type === 'noteNode' && n.data.label === '');
+          if (newNote) {
+            useAppStore.getState().updateNoteContent(newNote.id, result.synthesis);
+          }
+        }, 50);
+      } catch (error) {
+        console.error('Synthesis failed:', error);
+        alert(`Synthesis failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      } finally {
+        setSynthesizing(false);
+      }
+    },
+    [selectedNodes, nodes, addNoteNode, getNodes]
+  );
+
+  // Handle auto-layout
+  const handleLayout = useCallback(
+    (direction: LayoutDirection) => {
+      if (nodes.length === 0) return;
+
+      setShowLayoutMenu(false);
+      const layoutedNodes = getLayoutedElements(nodes, edges, direction);
+
+      // Update all node positions
+      layoutedNodes.forEach((node) => {
+        updateNodePosition(node.id, node.position);
+      });
+
+      // Fit view after layout with a small delay
+      setTimeout(() => {
+        fitView({ padding: 0.2, duration: 300 });
+      }, 50);
+    },
+    [nodes, edges, updateNodePosition, fitView]
+  );
+
   // Handle drag over to allow drop
   const handleDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault();
     event.dataTransfer.dropEffect = 'move';
   }, []);
 
-  // Handle drop from staging area
+  // Handle drop from staging area (text snippets and images)
   const handleDrop = useCallback(
     (event: React.DragEvent) => {
       event.preventDefault();
       const stagedItemId = event.dataTransfer.getData('application/staged-item');
+      const stagedImageId = event.dataTransfer.getData('application/staged-image');
+
+      // Convert screen coordinates to flow coordinates
+      const flowPosition = screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY,
+      });
 
       if (stagedItemId) {
-        // Convert screen coordinates to flow coordinates
-        const flowPosition = screenToFlowPosition({
-          x: event.clientX,
-          y: event.clientY,
-        });
-
-        // Move the staged item to canvas at drop position
+        // Move the staged text item to canvas at drop position
         moveToCanvas(stagedItemId, flowPosition);
+      } else if (stagedImageId) {
+        // Move the staged image to canvas at drop position
+        moveImageToCanvas(stagedImageId, flowPosition);
       }
     },
-    [screenToFlowPosition, moveToCanvas]
+    [screenToFlowPosition, moveToCanvas, moveImageToCanvas]
   );
 
   return (
@@ -307,6 +460,9 @@ function CanvasInner() {
         onlyRenderVisibleElements={true}
         snapToGrid={true}
         snapGrid={[16, 16]}
+        selectionOnDrag={true}
+        selectionMode={SelectionMode.Partial}
+        multiSelectionKeyCode="Control"
         defaultEdgeOptions={{
           type: 'smoothstep',
           style: { stroke: '#1e3a8a', strokeWidth: 2 },
@@ -377,6 +533,66 @@ function CanvasInner() {
           )}
         </div>
 
+        {/* Auto-Layout Dropdown */}
+        <div className="relative">
+          <button
+            onClick={() => setShowLayoutMenu(!showLayoutMenu)}
+            disabled={nodes.length === 0}
+            className="flex items-center gap-2 px-3 py-2 bg-white hover:bg-neutral-50 border border-neutral-300 rounded-none shadow-sm transition-colors disabled:opacity-50"
+            title="Auto-arrange nodes"
+          >
+            <LayoutGrid className="w-4 h-4 text-neutral-600" />
+            <span className="text-sm font-medium text-neutral-700">Layout</span>
+          </button>
+          {showLayoutMenu && (
+            <div className="absolute right-0 top-full mt-1 bg-white border border-neutral-200 shadow-lg rounded-none min-w-[160px] z-20">
+              <div className="px-3 py-1.5 text-xs font-bold text-neutral-500 uppercase tracking-wide border-b border-neutral-100">
+                Arrange Nodes
+              </div>
+              <button
+                onClick={() => handleLayout('TB')}
+                className="w-full px-3 py-2 text-left text-sm text-neutral-700 hover:bg-blue-50 flex items-center gap-2"
+              >
+                <ArrowDown className="w-4 h-4" />
+                Top to Bottom
+              </button>
+              <button
+                onClick={() => handleLayout('LR')}
+                className="w-full px-3 py-2 text-left text-sm text-neutral-700 hover:bg-blue-50 flex items-center gap-2"
+              >
+                <ArrowRight className="w-4 h-4" />
+                Left to Right
+              </button>
+              <button
+                onClick={() => handleLayout('radial')}
+                className="w-full px-3 py-2 text-left text-sm text-neutral-700 hover:bg-blue-50 flex items-center gap-2"
+              >
+                <Circle className="w-4 h-4" />
+                Radial
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Synthesize Button - shown when 2+ nodes selected */}
+        {selectedNodes.length >= 2 && (
+          <button
+            onClick={() => setShowSynthesizeModal(true)}
+            disabled={synthesizing}
+            className="flex items-center gap-2 px-3 py-2 bg-purple-100 hover:bg-purple-200 border-2 border-purple-300 rounded-none shadow-sm transition-colors"
+            title={`Synthesize ${selectedNodes.length} selected nodes`}
+          >
+            {synthesizing ? (
+              <Loader2 className="w-4 h-4 text-purple-700 animate-spin" />
+            ) : (
+              <Sparkles className="w-4 h-4 text-purple-700" />
+            )}
+            <span className="text-sm font-medium text-purple-800">
+              Synthesize ({selectedNodes.length})
+            </span>
+          </button>
+        )}
+
         {/* Add Note Button */}
         <button
           onClick={handleAddNoteButton}
@@ -387,6 +603,52 @@ function CanvasInner() {
           <span className="text-sm font-medium text-yellow-800">Add Note</span>
         </button>
       </div>
+
+      {/* Synthesize Mode Modal */}
+      {showSynthesizeModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-none shadow-xl border-l-4 border-purple-600 w-[360px] max-w-[90vw]">
+            <div className="flex items-center justify-between p-4 border-b border-neutral-200">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-purple-600" />
+                <h3 className="font-bold text-neutral-800">Synthesize {selectedNodes.length} Nodes</h3>
+              </div>
+              <button
+                onClick={() => setShowSynthesizeModal(false)}
+                className="p-1 hover:bg-neutral-100 rounded"
+              >
+                <X className="w-4 h-4 text-neutral-500" />
+              </button>
+            </div>
+            <div className="p-4 space-y-2">
+              <p className="text-sm text-neutral-600 mb-4">
+                Choose how to combine the selected content:
+              </p>
+              <button
+                onClick={() => handleSynthesize('summary')}
+                className="w-full p-3 text-left border border-neutral-200 hover:border-purple-300 hover:bg-purple-50 transition-colors"
+              >
+                <div className="font-medium text-neutral-800">Summary</div>
+                <div className="text-sm text-neutral-500">Concise summary of key points</div>
+              </button>
+              <button
+                onClick={() => handleSynthesize('compare')}
+                className="w-full p-3 text-left border border-neutral-200 hover:border-purple-300 hover:bg-purple-50 transition-colors"
+              >
+                <div className="font-medium text-neutral-800">Compare</div>
+                <div className="text-sm text-neutral-500">Find similarities and differences</div>
+              </button>
+              <button
+                onClick={() => handleSynthesize('narrative')}
+                className="w-full p-3 text-left border border-neutral-200 hover:border-purple-300 hover:bg-purple-50 transition-colors"
+              >
+                <div className="font-medium text-neutral-800">Narrative</div>
+                <div className="text-sm text-neutral-500">Weave into a coherent story</div>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Context Menu */}
       {contextMenu && (

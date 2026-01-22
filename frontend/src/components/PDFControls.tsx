@@ -7,6 +7,8 @@ import {
   Globe,
   Focus,
   Minimize2,
+  Scan,
+  Type,
 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 
@@ -17,6 +19,8 @@ export function PDFControls() {
   const setPdfScale = useAppStore((state) => state.setPdfScale);
   const focusMode = useAppStore((state) => state.focusMode);
   const toggleFocusMode = useAppStore((state) => state.toggleFocusMode);
+  const regionSelectMode = useAppStore((state) => state.regionSelectMode);
+  const toggleRegionSelectMode = useAppStore((state) => state.toggleRegionSelectMode);
 
   const { currentPage, numPages, scale } = pdfViewerState;
   const isPdf = selectedFile?.type === 'pdf';
@@ -138,6 +142,34 @@ export function PDFControls() {
             >
               <Maximize className="w-5 h-5 text-neutral-700" />
             </button>
+
+            <div className="h-4 w-px bg-neutral-300 mx-1" />
+
+            {/* Selection Mode Toggle */}
+            <div className="flex items-center bg-neutral-100 rounded-none overflow-hidden">
+              <button
+                onClick={() => regionSelectMode && toggleRegionSelectMode()}
+                className={`p-1.5 transition-colors ${
+                  !regionSelectMode
+                    ? 'bg-blue-900 text-white'
+                    : 'hover:bg-neutral-200 text-neutral-700'
+                }`}
+                title="Text Selection Mode"
+              >
+                <Type className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => !regionSelectMode && toggleRegionSelectMode()}
+                className={`p-1.5 transition-colors ${
+                  regionSelectMode
+                    ? 'bg-teal-600 text-white'
+                    : 'hover:bg-neutral-200 text-neutral-700'
+                }`}
+                title="Region Capture Mode"
+              >
+                <Scan className="w-4 h-4" />
+              </button>
+            </div>
 
             <div className="h-4 w-px bg-neutral-300 mx-1" />
           </>
