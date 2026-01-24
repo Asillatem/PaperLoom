@@ -1,6 +1,7 @@
 """Chat router for AI Brain with Graph-Guided RAG."""
 
 import json
+import logging
 import re
 from datetime import datetime
 from typing import Optional
@@ -15,6 +16,9 @@ from models import ChatSession, ChatMessage
 from services.llm_factory import create_llm, load_ai_settings
 from services.vector_store import query as vector_query, sync_project_nodes
 from services.graph_service import get_connected_nodes
+from services.prompts import get_prompt
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -90,6 +94,7 @@ async def chat(req: ChatRequest):
     8. Parse citations from response
     9. Save messages to database
     """
+    logger.info(f"Chat request: project={req.project_id}, session={req.session_id}, mode={req.context_mode}")
     settings = load_ai_settings()
     graph_depth = settings.get("graph_depth", 1)
     context_mode = req.context_mode or "auto"
@@ -260,13 +265,12 @@ async def chat(req: ChatRequest):
         system_prompt = settings.get("system_prompt", "You are a helpful assistant.")
         messages = []
 
-        # Add context instruction to system prompt
-        full_system = f"""{system_prompt}
-
-You have access to the following excerpts from the user's research documents. Reference them using [1], [2], etc. when answering.
-
-EXCERPTS:
-{context_text}"""
+        # Add context instruction to system prompt using external template
+        full_system = get_prompt(
+            "rag_template",
+            system_prompt=system_prompt,
+            context_text=context_text
+        )
 
         messages.append({"role": "system", "content": full_system})
 
@@ -282,6 +286,7 @@ EXCERPTS:
             llm = create_llm(settings)
             response_text = await llm.invoke(messages)
         except Exception as e:
+            logger.error(f"Chat LLM error: {e}", exc_info=True)
             raise HTTPException(status_code=500, detail=f"LLM error: {str(e)}")
 
         # Step 7: Parse citations from response
@@ -339,6 +344,7 @@ async def chat_stream(req: ChatRequest):
     - {"type": "token", "content": "..."} - streamed text tokens
     - {"type": "done", "session_id": ..., "insights": ..., "citations": [...]} - final event
     """
+    logger.info(f"Chat stream: project={req.project_id}, session={req.session_id}, mode={req.context_mode}")
     settings = load_ai_settings()
     graph_depth = settings.get("graph_depth", 1)
     context_mode = req.context_mode or "auto"
@@ -497,12 +503,12 @@ async def chat_stream(req: ChatRequest):
             system_prompt = settings.get("system_prompt", "You are a helpful assistant.")
             messages = []
 
-            full_system = f"""{system_prompt}
-
-You have access to the following excerpts from the user's research documents. Reference them using [1], [2], etc. when answering.
-
-EXCERPTS:
-{context_text}"""
+            # Add context instruction to system prompt using external template
+            full_system = get_prompt(
+                "rag_template",
+                system_prompt=system_prompt,
+                context_text=context_text
+            )
 
             messages.append({"role": "system", "content": full_system})
 
@@ -567,6 +573,7 @@ EXCERPTS:
             yield f"data: {json.dumps({'type': 'done', 'session_id': session_id, 'insights': insights.dict(), 'citations': citations})}\n\n"
 
         except Exception as e:
+            logger.error(f"Chat stream error: {e}", exc_info=True)
             yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
 
     return StreamingResponse(
@@ -691,24 +698,17 @@ async def generate_summary(session_id: int):
 
     full_conversation = "\n\n".join(conversation_text)
 
-    # Build summarization prompt
-    summary_prompt = f"""Summarize this research conversation in 2-3 concise bullet points. Focus on:
-- The main questions or topics discussed
-- Key insights or conclusions reached
-- Any important sources or citations mentioned
-
-Conversation:
-{full_conversation}
-
-Summary (use bullet points):"""
+    # Build summarization prompt using external templates
+    system_content = get_prompt("chat_summary.system")
+    user_content = get_prompt("chat_summary.user", conversation_text=full_conversation)
 
     # Call LLM
     try:
         llm = create_llm(settings)
         summary = ""
         async for token in llm.stream([
-            {"role": "system", "content": "You are a concise summarizer. Provide clear, brief summaries."},
-            {"role": "user", "content": summary_prompt}
+            {"role": "system", "content": system_content},
+            {"role": "user", "content": user_content}
         ]):
             summary += token
 
@@ -718,6 +718,7 @@ Summary (use bullet points):"""
             "session_id": session_id,
         }
     except Exception as e:
+        logger.error(f"Summary generation failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Summary generation failed: {str(e)}")
 
 
@@ -735,33 +736,8 @@ class SynthesizeResponse(BaseModel):
     mode: str
 
 
-SYNTHESIS_PROMPTS = {
-    "summary": """Synthesize the following excerpts into a concise summary that captures the key points and main ideas.
-Be clear and direct. Use 2-4 sentences.
-
-Excerpts:
-{content}
-
-Summary:""",
-
-    "compare": """Compare and contrast the following excerpts. Identify:
-- Common themes or agreements
-- Key differences or contradictions
-- Complementary perspectives
-
-Excerpts:
-{content}
-
-Comparison:""",
-
-    "narrative": """Weave the following excerpts into a coherent narrative paragraph that flows naturally.
-Connect the ideas logically and create a unified story from these pieces.
-
-Excerpts:
-{content}
-
-Narrative:""",
-}
+# Synthesis modes supported by external prompts
+SYNTHESIS_MODES = ["summary", "compare", "narrative"]
 
 
 @router.post("/synthesize", response_model=SynthesizeResponse)
@@ -803,18 +779,18 @@ async def synthesize_nodes(req: SynthesizeRequest):
 
     content_text = "\n\n".join(content_parts)
 
-    # Get the appropriate prompt template
-    mode = req.mode if req.mode in SYNTHESIS_PROMPTS else "summary"
-    prompt_template = SYNTHESIS_PROMPTS[mode]
-    prompt = prompt_template.format(content=content_text)
+    # Get the appropriate prompt template from external config
+    mode = req.mode if req.mode in SYNTHESIS_MODES else "summary"
+    system_content = get_prompt("synthesis.system")
+    user_content = get_prompt(f"synthesis.{mode}", content=content_text)
 
     # Call LLM
     try:
         llm = create_llm(settings)
         synthesis = ""
         async for token in llm.stream([
-            {"role": "system", "content": "You are a skilled research assistant that synthesizes information clearly and concisely."},
-            {"role": "user", "content": prompt}
+            {"role": "system", "content": system_content},
+            {"role": "user", "content": user_content}
         ]):
             synthesis += token
 
@@ -824,4 +800,5 @@ async def synthesize_nodes(req: SynthesizeRequest):
             mode=mode,
         )
     except Exception as e:
+        logger.error(f"Synthesis failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Synthesis failed: {str(e)}")

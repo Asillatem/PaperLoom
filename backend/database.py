@@ -1,11 +1,10 @@
 from sqlmodel import SQLModel, Session, create_engine
-import os
 
-DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///./paperloom.db")
+from config import settings
 
 # SQLite needs check_same_thread=False for FastAPI
-connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
-engine = create_engine(DATABASE_URL, echo=False, connect_args=connect_args)
+connect_args = {"check_same_thread": False} if settings.DATABASE_URL.startswith("sqlite") else {}
+engine = create_engine(settings.DATABASE_URL, echo=False, connect_args=connect_args)
 
 
 def create_db_and_tables():

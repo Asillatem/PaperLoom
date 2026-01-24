@@ -1,10 +1,13 @@
 """Settings router for AI configuration."""
 
+import logging
 import httpx
 from fastapi import APIRouter
 
 from schemas.ai_settings import AISettings, AISettingsResponse
 from services.llm_factory import load_ai_settings, save_ai_settings, test_llm_connection, get_api_key
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 
@@ -19,10 +22,12 @@ async def get_ai_settings():
 @router.put("/ai")
 async def update_ai_settings(settings: AISettings):
     """Update AI settings."""
+    logger.info(f"Updating AI settings: provider={settings.provider}, model={settings.model_name}")
     new_settings = settings.model_dump()
     # Remove openai_key_configured as it's computed, not stored
     new_settings.pop("openai_key_configured", None)
     save_ai_settings(new_settings)
+    logger.info("AI settings saved successfully")
     return {"status": "success"}
 
 
@@ -71,6 +76,8 @@ async def get_available_models():
                 else:
                     return {"status": "error", "message": f"OpenAI returned {response.status_code}", "models": []}
     except httpx.ConnectError:
+        logger.warning(f"Cannot connect to {provider} to fetch models")
         return {"status": "error", "message": f"Cannot connect to {provider}", "models": []}
     except Exception as e:
+        logger.error(f"Error fetching models: {e}", exc_info=True)
         return {"status": "error", "message": str(e), "models": []}

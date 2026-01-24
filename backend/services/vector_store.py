@@ -1,19 +1,20 @@
 """Vector store service using ChromaDB for semantic search."""
 
 import hashlib
-from pathlib import Path
+import logging
 from typing import Optional
 
 import chromadb
-from chromadb.config import Settings
+from chromadb.config import Settings as ChromaSettings
+
+from config import settings
+
+logger = logging.getLogger(__name__)
 
 
 def _content_hash(content: str) -> str:
     """Generate a hash of content to detect changes."""
     return hashlib.md5(content.encode()).hexdigest()[:16]
-
-# Store ChromaDB data in backend/chroma_db/
-CHROMA_PATH = Path(__file__).parent.parent / "chroma_db"
 
 # Global client instance
 _client: Optional[chromadb.ClientAPI] = None
@@ -24,10 +25,10 @@ def get_chroma_client() -> chromadb.ClientAPI:
     """Get or create the ChromaDB client."""
     global _client
     if _client is None:
-        CHROMA_PATH.mkdir(exist_ok=True)
+        settings.chroma_path.mkdir(exist_ok=True)
         _client = chromadb.PersistentClient(
-            path=str(CHROMA_PATH),
-            settings=Settings(anonymized_telemetry=False),
+            path=str(settings.chroma_path),
+            settings=ChromaSettings(anonymized_telemetry=False),
         )
     return _client
 
@@ -37,11 +38,13 @@ def get_collection() -> chromadb.Collection:
     global _collection
     if _collection is None:
         client = get_chroma_client()
+        logger.info("Initializing Vector Store collection")
         # Use default embedding function (all-MiniLM-L6-v2)
         _collection = client.get_or_create_collection(
             name="snippets",
             metadata={"hnsw:space": "cosine"},
         )
+        logger.info(f"Vector collection ready: {_collection.count()} documents indexed")
     return _collection
 
 
@@ -155,6 +158,7 @@ def sync_project_nodes(project_id: str, nodes: list[dict]) -> int:
     Returns:
         Number of nodes that were actually updated (for debugging)
     """
+    logger.info(f"Syncing {len(nodes)} nodes for project {project_id}")
     collection = get_collection()
 
     # Get existing nodes with their metadata (including content_hash)
@@ -199,5 +203,9 @@ def sync_project_nodes(project_id: str, nodes: list[dict]) -> int:
     removed_ids = existing_ids - current_ids
     if removed_ids:
         collection.delete(ids=list(removed_ids))
+        logger.info(f"Removed {len(removed_ids)} deleted nodes from index")
+
+    if updated_count > 0:
+        logger.info(f"Indexed {updated_count} new/updated nodes")
 
     return updated_count

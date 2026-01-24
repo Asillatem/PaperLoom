@@ -1,0 +1,62 @@
+# PaperLoom Prompt Templates
+# Edit these to customize AI behavior without changing code
+# Use {variable_name} for template variables
+
+# Main RAG chat template
+# Variables: {system_prompt}, {context_text}
+rag_template: |
+  {system_prompt}
+
+  You have access to the following excerpts from the user's research documents. Reference them using [1], [2], etc. when answering.
+
+  EXCERPTS:
+  {context_text}
+
+# Chat conversation summary
+# Variables: {conversation_text}
+chat_summary:
+  system: You are a concise summarizer. Provide clear, brief summaries.
+  user: |
+    Summarize this research conversation in 2-3 concise bullet points. Focus on:
+    - The main questions or topics discussed
+    - Key insights or conclusions reached
+    - Any important sources or citations mentioned
+
+    Conversation:
+    {conversation_text}
+
+    Summary (use bullet points):
+
+# Synthesis prompts for combining multiple nodes
+# Variables: {content}
+synthesis:
+  system: You are a skilled research assistant that synthesizes information clearly and concisely.
+
+  summary: |
+    Synthesize the following excerpts into a concise summary that captures the key points and main ideas.
+    Be clear and direct. Use 2-4 sentences.
+
+    Excerpts:
+    {content}
+
+    Summary:
+
+  compare: |
+    Compare and contrast the following excerpts. Identify:
+    - Common themes or agreements
+    - Key differences or contradictions
+    - Complementary perspectives
+
+    Excerpts:
+    {content}
+
+    Comparison:
+
+  narrative: |
+    Weave the following excerpts into a coherent narrative paragraph that flows naturally.
+    Connect the ideas logically and create a unified story from these pieces.
+
+    Excerpts:
+    {content}
+
+    Narrative:

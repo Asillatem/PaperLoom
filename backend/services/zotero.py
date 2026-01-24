@@ -2,28 +2,27 @@
 Zotero API service for fetching library items and attachments.
 Uses pyzotero to interact with Zotero Cloud API.
 """
-import os
+import logging
 import zipfile
-import tempfile
 from pathlib import Path
 from typing import Optional
 from pyzotero import zotero
 
-# Cache directory for downloaded files (resolve to absolute path)
-_cache_env = os.environ.get("CACHE_DIR", "./cache")
-CACHE_DIR = Path(_cache_env).resolve()
+from config import settings
+
+logger = logging.getLogger(__name__)
 
 
 class ZoteroService:
     """Service for interacting with Zotero Cloud API."""
 
     def __init__(self):
-        self.user_id = os.environ.get("ZOTERO_USER_ID")
-        self.api_key = os.environ.get("ZOTERO_API_KEY")
+        self.user_id = settings.ZOTERO_USER_ID
+        self.api_key = settings.ZOTERO_API_KEY
         self._client: Optional[zotero.Zotero] = None
 
         # Ensure cache directory exists
-        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        settings.cache_path.mkdir(parents=True, exist_ok=True)
 
     @property
     def client(self) -> zotero.Zotero:
@@ -122,7 +121,7 @@ class ZoteroService:
                             "linkMode": link_mode,
                         })
         except Exception as e:
-            print(f"Error fetching attachments for {parent_key}: {e}")
+            logger.error(f"Error fetching attachments for {parent_key}: {e}", exc_info=True)
 
         return attachments
 
@@ -154,7 +153,7 @@ class ZoteroService:
         import shutil
 
         # Cache path is a directory containing the downloaded file
-        cache_path = CACHE_DIR / attachment_key
+        cache_path = settings.cache_path / attachment_key
 
         if cache_path.exists() and cache_path.is_dir():
             files = list(cache_path.iterdir())
@@ -165,7 +164,7 @@ class ZoteroService:
                 return file_path, content_type
 
         # Ensure cache directory exists
-        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        settings.cache_path.mkdir(parents=True, exist_ok=True)
 
         try:
             # Get attachment info first to know the filename

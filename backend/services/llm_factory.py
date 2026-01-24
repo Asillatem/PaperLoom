@@ -1,33 +1,32 @@
 """LLM Factory for creating LLM clients using httpx."""
 
 import json
-import os
-from pathlib import Path
+import logging
 from typing import Optional, AsyncIterator
 import httpx
 
+from config import settings
 from schemas.ai_settings import AISettings
 
-SECRETS_PATH = Path(__file__).parent.parent / "secrets.json"
+logger = logging.getLogger(__name__)
 
 # Default settings
 DEFAULT_SETTINGS = AISettings().model_dump()
 
 
 def get_api_key(provider: str) -> str:
-    """Get API key from environment variable based on provider."""
+    """Get API key from config settings based on provider."""
     if provider == "openai":
-        key = os.environ.get("OPENAI_API_KEY", "")
-        return key if key else ""
+        return settings.OPENAI_API_KEY or ""
     # Ollama doesn't need a real key
     return "ollama"
 
 
 def load_ai_settings() -> dict:
     """Load AI settings from secrets.json."""
-    if SECRETS_PATH.exists():
+    if settings.secrets_path.exists():
         try:
-            with open(SECRETS_PATH, "r") as f:
+            with open(settings.secrets_path, "r") as f:
                 data = json.load(f)
                 return {**DEFAULT_SETTINGS, **data.get("ai_settings", {})}
         except (json.JSONDecodeError, IOError):
@@ -35,19 +34,19 @@ def load_ai_settings() -> dict:
     return DEFAULT_SETTINGS.copy()
 
 
-def save_ai_settings(settings: dict) -> None:
+def save_ai_settings(ai_settings: dict) -> None:
     """Save AI settings to secrets.json."""
     data = {}
-    if SECRETS_PATH.exists():
+    if settings.secrets_path.exists():
         try:
-            with open(SECRETS_PATH, "r") as f:
+            with open(settings.secrets_path, "r") as f:
                 data = json.load(f)
         except (json.JSONDecodeError, IOError):
             pass
 
-    data["ai_settings"] = settings
+    data["ai_settings"] = ai_settings
 
-    with open(SECRETS_PATH, "w") as f:
+    with open(settings.secrets_path, "w") as f:
         json.dump(data, f, indent=2)
 
 
@@ -142,26 +141,29 @@ class SimpleLLM:
                             continue
 
 
-def create_llm(settings: Optional[dict] = None) -> SimpleLLM:
+def create_llm(ai_settings: Optional[dict] = None) -> SimpleLLM:
     """
     Create SimpleLLM instance.
 
     Works for both OpenAI and Ollama (via base_url).
     API keys are loaded from environment variables, not from settings.
     """
-    if settings is None:
-        settings = load_ai_settings()
+    if ai_settings is None:
+        ai_settings = load_ai_settings()
 
-    provider = settings.get("provider", "ollama")
+    provider = ai_settings.get("provider", "ollama")
+    model = ai_settings.get("model_name", "llama3.2")
     api_key = get_api_key(provider)
 
+    logger.info(f"Creating LLM: provider={provider}, model={model}")
+
     return SimpleLLM(
-        model=settings.get("model_name", "llama3.2"),
-        base_url=settings.get("base_url", "http://localhost:11434/v1"),
+        model=model,
+        base_url=ai_settings.get("base_url", "http://localhost:11434/v1"),
         api_key=api_key,
-        temperature=settings.get("temperature", 0.7),
-        max_tokens=min(settings.get("context_window", 4096), 4096),
-        system_prompt=settings.get("system_prompt", ""),
+        temperature=ai_settings.get("temperature", 0.7),
+        max_tokens=min(ai_settings.get("context_window", 4096), 4096),
+        system_prompt=ai_settings.get("system_prompt", ""),
     )
 
 
@@ -170,21 +172,25 @@ async def test_llm_connection() -> dict:
     try:
         llm = create_llm()
         response = await llm.invoke([{"role": "user", "content": "Say 'OK' if you can hear me."}])
+        logger.info("LLM connection test successful")
         return {
             "status": "success",
             "response": response[:100] if response else "No response",
         }
     except httpx.ConnectError:
+        logger.error("LLM connection test failed: Cannot connect to server")
         return {
             "status": "error",
             "message": "Cannot connect to LLM server. Is Ollama running?",
         }
     except httpx.HTTPStatusError as e:
+        logger.error(f"LLM connection test failed: HTTP {e.response.status_code}")
         return {
             "status": "error",
             "message": f"HTTP error: {e.response.status_code}",
         }
     except Exception as e:
+        logger.error(f"LLM connection test failed: {e}", exc_info=True)
         return {
             "status": "error",
             "message": str(e),

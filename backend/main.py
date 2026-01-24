@@ -1,50 +1,45 @@
-from dotenv import load_dotenv
-load_dotenv()  # Load .env file before accessing env vars
-
+import logging
+import sys
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlmodel import Session, select
-import os
 from pathlib import Path
 import aiofiles
 import json
 from typing import List, Optional
 from datetime import datetime
 
+from config import settings
 from database import create_db_and_tables, get_session, engine
 from services.zotero import get_zotero_service
 from models import CachedZoteroItem, ChatSession, ChatMessage
 import models  # noqa: F401 - imported for SQLModel metadata
-from routers import settings, chat
+from routers import settings as settings_router, chat
 
-
-# Configuration from environment variables with sensible defaults
-PROJECTS_DIR = Path(os.environ.get("PROJECTS_DIR", str(Path.cwd() / "projects")))
-
-# CORS origins from environment (comma-separated) or default dev ports
-DEFAULT_CORS_ORIGINS = "http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173,http://127.0.0.1:3000"
-CORS_ORIGINS = [origin.strip() for origin in os.environ.get("CORS_ORIGINS", DEFAULT_CORS_ORIGINS).split(",") if origin.strip()]
+# --- Logging Configuration ---
+logging.basicConfig(
+	level=logging.INFO,
+	format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+	handlers=[logging.StreamHandler(sys.stdout)]
+)
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="PaperLoom API")
 
 # CORS configuration
 app.add_middleware(
 	CORSMiddleware,
-	allow_origins=CORS_ORIGINS,
+	allow_origins=settings.cors_origins_list,
 	allow_credentials=True,
 	allow_methods=["*"],
 	allow_headers=["*"],
 )
 
 # Include routers
-app.include_router(settings.router)
+app.include_router(settings_router.router)
 app.include_router(chat.router)
-
-
-def ensure_dirs() -> None:
-	PROJECTS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def safe_resolve(base: Path, relative: str) -> Path:
@@ -66,8 +61,12 @@ class SaveRequest(BaseModel):
 
 @app.on_event("startup")
 async def startup_event():
-	ensure_dirs()
+	settings.ensure_directories()
 	create_db_and_tables()
+	logger.info("PaperLoom Backend starting up...")
+	logger.info(f"Projects Directory: {settings.projects_path}")
+	logger.info(f"Cache Directory: {settings.cache_path}")
+	logger.info(f"ChromaDB Path: {settings.chroma_path}")
 
 
 @app.get("/files")
@@ -273,14 +272,14 @@ async def get_item_metadata(attachment_key: str):
 
 @app.post("/save")
 async def save_project(req: SaveRequest):
-	"""Save project JSON to PROJECTS_DIR. Filename sanitized."""
+	"""Save project JSON to settings.projects_path. Filename sanitized."""
 	body = req.project
 	fname = req.filename or "project.json"
 	# sanitize simple filenames (no path separators)
-	fname = os.path.basename(fname)
+	fname = Path(fname).name
 	if not fname.endswith(".json"):
 		fname = fname + ".json"
-	target = safe_resolve(PROJECTS_DIR, fname)
+	target = safe_resolve(settings.projects_path, fname)
 	# basic size guard
 	raw = json.dumps(body)
 	if len(raw.encode("utf-8")) > 10 * 1024 * 1024:
@@ -295,7 +294,7 @@ async def save_project(req: SaveRequest):
 async def list_projects() -> List[dict]:
 	"""List all saved projects with summary metadata."""
 	projects = []
-	for file in PROJECTS_DIR.glob("*.json"):
+	for file in settings.projects_path.glob("*.json"):
 		try:
 			async with aiofiles.open(file, "r", encoding="utf-8") as f:
 				content = await f.read()
@@ -320,7 +319,7 @@ async def list_projects() -> List[dict]:
 @app.get("/projects/{filename}")
 async def get_project(filename: str):
 	"""Load a specific project file."""
-	target = safe_resolve(PROJECTS_DIR, filename)
+	target = safe_resolve(settings.projects_path, filename)
 
 	if not target.exists():
 		raise HTTPException(status_code=404, detail="Project not found")
@@ -336,7 +335,7 @@ async def get_project(filename: str):
 @app.delete("/projects/{filename}")
 async def delete_project(filename: str):
 	"""Delete a project file."""
-	target = safe_resolve(PROJECTS_DIR, filename)
+	target = safe_resolve(settings.projects_path, filename)
 
 	if not target.exists():
 		raise HTTPException(status_code=404, detail="Project not found")
@@ -354,7 +353,7 @@ async def export_project(filename: str, format: str = "json"):
 		filename: The project filename (e.g., "My Project.json")
 		format: Export format - "json" or "markdown"
 	"""
-	target = safe_resolve(PROJECTS_DIR, filename)
+	target = safe_resolve(settings.projects_path, filename)
 
 	if not target.exists():
 		raise HTTPException(status_code=404, detail="Project not found")
